@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "wallpaper-feed",
+  "post": {
+    "dir": "public",
+    "entrypoints": {
+      "default": {
+        "entry": "index.html",
+        "height": "regular"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.js"
+  },
+  "permissions": {
+    "reddit": {
+      "enable": true
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/server/index.ts --bundle --platform=node --format=cjs --external:@devvit/web --outfile=dist/server/index.js"
+  }
+}
