@@ -31,6 +31,10 @@ public sealed class RedditService
     private readonly Dictionary<string, (List<RedditImage> Items, DateTime Fetched)> _rssCache = new();
     private static readonly TimeSpan RssCacheTtl = TimeSpan.FromMinutes(15);
 
+    // 分辨率不匹配的帖子 ID 记录，避免每轮重复下载同一批不匹配图片（切换分辨率时清空）
+    private readonly HashSet<string> _resolutionSkip = new(StringComparer.OrdinalIgnoreCase);
+    private string _resolutionSkipKey = "";
+
     // .json 被封锁后冷却一段时间，避免每轮都白撞一次
     private DateTime _jsonBlockedUntil = DateTime.MinValue;
 
@@ -59,6 +63,13 @@ public sealed class RedditService
         }
 
         var http = NetworkHelper.GetClient(s, NetworkHelper.RedditUserAgent);
+
+        var resKey = s.WallpaperResolution ?? "any";
+        if (!string.Equals(resKey, _resolutionSkipKey, StringComparison.OrdinalIgnoreCase))
+        {
+            _resolutionSkip.Clear();
+            _resolutionSkipKey = resKey;
+        }
 
         var subs = string.Join("+", s.Subreddits
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -134,6 +145,10 @@ public sealed class RedditService
         if (candidates is null || candidates.Count == 0)
             return DownloadResult.Fail(string.Join("；", errors));
 
+        candidates.RemoveAll(c => _resolutionSkip.Contains(c.Id));
+        if (candidates.Count == 0)
+            return DownloadResult.Fail("候选图片均不符合当前最低分辨率（已跳过历史不匹配项）");
+
         if (randomMode)
             note = (note is null ? "" : note + "；") + "随机排序：忽略时间范围与最低得分";
 
@@ -150,7 +165,7 @@ public sealed class RedditService
         {
             var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, skipIfExists: true);
             if (path is null) continue;
-            if (!AcceptResolution(path, s)) { mismatch++; continue; }
+            if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
             return DownloadResult.Ok(path, note);
         }
 
@@ -159,6 +174,7 @@ public sealed class RedditService
         if (refreshed is { Count: > 0 })
         {
             candidates = refreshed;
+            candidates.RemoveAll(c => _resolutionSkip.Contains(c.Id));
             for (int i = candidates.Count - 1; i > 0; i--)
             {
                 int j = Random.Shared.Next(i + 1);
@@ -168,7 +184,7 @@ public sealed class RedditService
             {
                 var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, skipIfExists: true);
                 if (path is null) continue;
-                if (!AcceptResolution(path, s)) { mismatch++; continue; }
+                if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
                 return DownloadResult.Ok(path, note);
             }
         }
@@ -185,7 +201,7 @@ public sealed class RedditService
         {
             var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
             if (path is null) continue;
-            if (!AcceptResolution(path, s)) { mismatch++; continue; }
+            if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
             return DownloadResult.Ok(path, note);
         }
 

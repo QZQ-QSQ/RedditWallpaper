@@ -13,10 +13,21 @@ public sealed class DevvitService
 {
     private sealed record FeedItem(string Id, string Title, string Url, int Score, string Slug);
 
+    // 分辨率不匹配的帖子 ID 记录，避免每轮重复下载（切换分辨率时清空）
+    private readonly HashSet<string> _resolutionSkip = new(StringComparer.OrdinalIgnoreCase);
+    private string _resolutionSkipKey = "";
+
     public async Task<RedditService.DownloadResult> TryDownloadWallpaperAsync(AppSettings s, string saveFolder)
     {
         if (string.IsNullOrWhiteSpace(s.DevvitFeedUrl))
             return RedditService.DownloadResult.Fail("未配置 Devvit 订阅源地址");
+
+        var resKey = s.WallpaperResolution ?? "any";
+        if (!string.Equals(resKey, _resolutionSkipKey, StringComparison.OrdinalIgnoreCase))
+        {
+            _resolutionSkip.Clear();
+            _resolutionSkipKey = resKey;
+        }
 
         try
         {
@@ -45,6 +56,8 @@ public sealed class DevvitService
             if (items.Count == 0)
                 return RedditService.DownloadResult.Fail("Devvit 端点没有返回可用图片（检查社区名/最低得分）");
 
+            items.RemoveAll(i => _resolutionSkip.Contains(i.Id));
+
             for (int i = items.Count - 1; i > 0; i--)
             {
                 int j = Random.Shared.Next(i + 1);
@@ -58,6 +71,7 @@ public sealed class DevvitService
                 if (!ImageSize.Matches(path, s.WallpaperResolution))
                 {
                     try { File.Delete(path); } catch { }
+                    _resolutionSkip.Add(item.Id);
                     continue;
                 }
                 return RedditService.DownloadResult.Ok(path, "Devvit 源");

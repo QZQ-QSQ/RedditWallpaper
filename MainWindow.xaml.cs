@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using RedditWallpaper.Models;
 using RedditWallpaper.Services;
@@ -27,6 +28,9 @@ public sealed partial class MainWindow : Window
     private TrayIcon? _tray;
     private bool _exiting;
     private bool _uiReady;
+
+    /// <summary>供 App.OnLaunched 判断是否需要"启动即隐藏"</summary>
+    public static bool StartHidden { get; private set; }
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -71,11 +75,13 @@ public sealed partial class MainWindow : Window
         // 上次设置要求启动即轮换
         if (_settings.AutoRotateOnLaunch) StartRotation();
 
-        // 启动时最小化到托盘（窗口创建后立即隐藏）
-        if (_settings.StartMinimized) ShowWindow(_hwnd, SW_HIDE);
+        StartHidden = _settings.StartMinimized;
 
         RefreshThumbnails();
     }
+
+    /// <summary>启动即隐藏主窗口（在 Activate 之后调用）</summary>
+    public void HideForStartup() => ShowWindow(_hwnd, SW_HIDE);
 
     // ---------------- 设置 <-> UI ----------------
 
@@ -124,7 +130,8 @@ public sealed partial class MainWindow : Window
 
     private AppSettings ReadSettingsFromUi()
     {
-        _settings.RotateMinutes = Math.Max(1, (int)RotateMinutes.Value);
+        _settings.RotateMinutes = Math.Max(1,
+            double.IsNaN(RotateMinutes.Value) ? 30 : (int)RotateMinutes.Value);
         _settings.UseReddit = UseRedditToggle.IsOn;
         _settings.UseBing = UseBingToggle.IsOn;
         _settings.UseLocal = UseLocalToggle.IsOn;
@@ -145,7 +152,8 @@ public sealed partial class MainWindow : Window
 
         _settings.RedditSort = SelectedTag(SortCombo);
         _settings.RedditTimeRange = SelectedTag(RangeCombo);
-        _settings.RedditMinScore = Math.Max(0, (int)MinScoreBox.Value);
+        _settings.RedditMinScore = Math.Max(0,
+            double.IsNaN(MinScoreBox.Value) ? 100 : (int)MinScoreBox.Value);
         _settings.SkipNsfw = SkipNsfwToggle.IsOn;
         _settings.SaveFolder = SaveFolderBox.Text.Trim();
         _settings.LocalFolder = LocalFolderBox.Text.Trim();
@@ -288,23 +296,42 @@ public sealed partial class MainWindow : Window
 
     private async void PickFolder_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FolderPicker
+        try
         {
-            SuggestedStartLocation = PickerLocationId.PicturesLibrary
-        };
-        picker.FileTypeFilter.Add("*");
+            var picker = new FolderPicker
+            {
+                SuggestedStartLocation = PickerLocationId.PicturesLibrary
+            };
+            picker.FileTypeFilter.Add("*");
 
-        // 非打包应用必须把窗口句柄交给 Picker
-        InitializeWithWindow.Initialize(picker, _hwnd);
+            // 非打包应用必须把窗口句柄交给 Picker
+            InitializeWithWindow.Initialize(picker, _hwnd);
 
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder is null) return;
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is null) return;
 
-        if (sender is Button b && b == PickSaveFolder) { SaveFolderBox.Text = folder.Path; RefreshThumbnails(); }
-        else if (sender is Button lb && lb == PickLocalFolder) LocalFolderBox.Text = folder.Path;
+            if (sender is Button b && b == PickSaveFolder) { SaveFolderBox.Text = folder.Path; RefreshThumbnails(); }
+            else if (sender is Button lb && lb == PickLocalFolder) LocalFolderBox.Text = folder.Path;
+        }
+        catch (Exception ex)
+        {
+            SetStatus("选择文件夹失败：" + ex.Message);
+        }
     }
 
     private async void BrowserAuth_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await BrowserAuthCoreAsync();
+        }
+        catch (Exception ex)
+        {
+            SetStatus("授权出错：" + ex.Message);
+        }
+    }
+
+    private async Task BrowserAuthCoreAsync()
     {
         var s = ReadSettingsFromUi();
         SettingsService.Save(s);
@@ -354,6 +381,18 @@ public sealed partial class MainWindow : Window
     }
 
     private async void VerifySession_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await VerifySessionCoreAsync();
+        }
+        catch (Exception ex)
+        {
+            SetStatus("验证出错：" + ex.Message);
+        }
+    }
+
+    private async Task VerifySessionCoreAsync()
     {
         var s = ReadSettingsFromUi();
         SettingsService.Save(s);
@@ -415,6 +454,46 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { SetStatus("打开文件夹失败：" + ex.Message); }
     }
 
+    // ---------------- 可拖拽分隔条 ----------------
+
+    private bool _splitterDragging;
+    private double _dragStartRootX;
+    private double _leftStartWidth;
+
+    private void Splitter_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _splitterDragging = true;
+        var root = (UIElement)Content!;
+        _dragStartRootX = e.GetCurrentPoint(root).Position.X;
+        _leftStartWidth = LeftColumn.Width.IsAbsolute ? LeftColumn.Width.Value : LeftColumn.ActualWidth;
+        ((UIElement)sender).CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void Splitter_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_splitterDragging) return;
+        try
+        {
+            var root = (FrameworkElement)Content!;
+            var dx = e.GetCurrentPoint(root).Position.X - _dragStartRootX;
+            var splitterWidth = ((FrameworkElement)sender).ActualWidth;
+            var total = root.ActualWidth - splitterWidth;
+            var newLeft = Math.Clamp(_leftStartWidth + dx, 380, Math.Max(380, total - 480));
+            LeftColumn.Width = new GridLength(newLeft, GridUnitType.Pixel);
+            e.Handled = true;
+        }
+        catch { /* 拖拽中的指针事件异常忽略 */ }
+    }
+
+    private void Splitter_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_splitterDragging) return;
+        _splitterDragging = false;
+        ((UIElement)sender).ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+    }
+
     // ---------------- 中间栏：图片浏览 ----------------
 
     private void RefreshThumbs_Click(object sender, RoutedEventArgs e) => RefreshThumbnails();
@@ -443,6 +522,8 @@ public sealed partial class MainWindow : Window
             SetStatus("读取图片列表失败：" + ex.Message);
             return;
         }
+
+        ThumbCountText.Text = files.Count == 0 ? "文件夹里没有图片" : $"共 {files.Count} 张（显示最近 {Math.Min(files.Count, 200)} 张）";
 
         foreach (var path in files)
         {
@@ -539,6 +620,7 @@ public sealed partial class MainWindow : Window
 
     private void StartRotation()
     {
+        if (double.IsNaN(RotateMinutes.Value)) RotateMinutes.Value = _settings.RotateMinutes;
         _rotating = true;
         ToggleTimerBtn.Content = "停止自动轮换";
         _nextChange = DateTime.Now.AddMinutes(Math.Max(1, _settings.RotateMinutes));
@@ -690,6 +772,10 @@ public sealed partial class MainWindow : Window
                 SetStatus("未能获取到图片。各来源情况：" + Environment.NewLine +
                           (errors.Count > 0 ? string.Join(Environment.NewLine, errors) : "未勾选任何来源"));
             }
+        }
+        catch (Exception ex)
+        {
+            SetStatus("更换壁纸时出错：" + ex.Message);
         }
         finally
         {
