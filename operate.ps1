@@ -29,8 +29,8 @@ public class Hnd {
     $script:hwnd = [IntPtr]::Zero
     $cb = [Hnd+EnumProc]{ param($w, $l) [uint32]$op = 0; [Hnd]::GetWindowThreadProcessId($w, [ref]$op) | Out-Null; if ($op -eq $AppPid) { $sb = New-Object System.Text.StringBuilder 256; [Hnd]::GetWindowText($w, $sb, 256) | Out-Null; if ($sb.ToString() -like '*壁纸轮换*') { $script:hwnd = $w; return $false } }; return $true }
     [Hnd]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
-    [Hnd]::ShowWindow($script:hwnd, 5) | Out-Null
-    Start-Sleep -Milliseconds 800
+    [Hnd]::ShowWindow($script:hwnd, 9) | Out-Null   # SW_RESTORE
+    Start-Sleep -Milliseconds 1000
 }
 
 try {
@@ -41,6 +41,8 @@ try {
     $AppPid = [int]$launch.ProcessId
     Start-Sleep -Seconds 2
     Show-AppWindow
+    # 等待 UIA 树就绪（窗口显示后控件才会 realization）
+    IW @('ui', 'wait-for', 'UseOAuthToggle', '-t', '10000', '-a', $AppPid) | Out-Null
 
     $orig = @{}
     foreach ($id in 'UseRedditToggle','UseBingToggle','UseLocalToggle','SourcePriorityToggle','AutoRotateOnLaunchToggle','StartMinimizedToggle','AutoStartToggle','SkipNsfwToggle','UseOAuthToggle') {

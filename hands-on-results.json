@@ -3,7 +3,7 @@
     "failed":  1,
     "results":  [
                     {
-                        "detail":  "winapp ui get-value UseOAuthToggle --json -a 4548 失败: ",
+                        "detail":  "winapp ui wait-for UseOAuthToggle -t 10000 -a 3604 失败: ",
                         "status":  "FAIL",
                         "name":  "执行错误"
                     }
