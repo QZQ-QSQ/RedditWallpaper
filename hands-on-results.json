@@ -1,0 +1,11 @@
+﻿{
+    "passed":  0,
+    "failed":  1,
+    "results":  [
+                    {
+                        "detail":  "winapp ui get-value UseOAuthToggle --json -a 4548 失败: ",
+                        "status":  "FAIL",
+                        "name":  "执行错误"
+                    }
+                ]
+}

@@ -36,6 +36,9 @@ public sealed partial class MainWindow : Window
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private const int SW_HIDE = 0;
@@ -55,7 +58,12 @@ public sealed partial class MainWindow : Window
         _tickTimer.Tick += (_, _) => OnTick();
 
         Title = "Reddit 壁纸轮换";
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1440, 880));
+
+        // 按官方指引：AppWindow.Resize 使用物理像素，需乘以 DPI 缩放
+        var dpiHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpiScale = GetDpiForWindow(dpiHwnd) / 96.0;
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(
+            (int)Math.Round(1440 * dpiScale), (int)Math.Round(880 * dpiScale)));
 
         // 关闭窗口 → 收进托盘继续轮换
         AppWindow.Closing += OnWindowClosing;

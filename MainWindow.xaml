@@ -26,6 +26,14 @@
                 <Setter Property="Opacity" Value="0.7" />
                 <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
+            <Style x:Key="ThumbItemStyle" TargetType="GridViewItem">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="4" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Top" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+            </Style>
         </Grid.Resources>
 
         <Grid.ColumnDefinitions>
@@ -420,9 +428,14 @@
                     <Button Content="刷新" Click="RefreshThumbs_Click" />
                     <Button Content="打开文件夹" Click="OpenFolder_Click" />
                 </StackPanel>
-                <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
-                    <GridView x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False" />
-                </ScrollViewer>
+                <GridView Grid.Row="4" x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False"
+                          ItemContainerStyle="{StaticResource ThumbItemStyle}">
+                    <GridView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsWrapGrid Orientation="Horizontal" ItemWidth="180" ItemHeight="212" />
+                        </ItemsPanelTemplate>
+                    </GridView.ItemsPanel>
+                </GridView>
             </Grid>
         </Border>
     </Grid>
