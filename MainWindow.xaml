@@ -8,15 +8,20 @@
     mc:Ignorable="d"
     Title="Reddit 壁纸轮换">
 
-    <Grid Padding="12" ColumnSpacing="8" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Padding="10" ColumnSpacing="6" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.Resources>
-        <x:Double x:Key="SettingsCardSpacing">4</x:Double>
+        <x:Double x:Key="SettingsCardSpacing">3</x:Double>
+
+        <!-- 紧凑排版：覆盖 toolkit 的默认内边距/最小高度，减少留白 -->
+        <Thickness x:Key="SettingsCardPadding">12,9,12,9</Thickness>
+        <x:Double x:Key="SettingsCardMinHeight">52</x:Double>
+        <Thickness x:Key="SettingsCardHeaderIconMargin">2,0,12,0</Thickness>
 
         <Style x:Key="SettingsSectionHeaderTextBlockStyle"
                BasedOn="{StaticResource BodyStrongTextBlockStyle}"
                TargetType="TextBlock">
             <Style.Setters>
-                <Setter Property="Margin" Value="1,24,0,6" />
+                <Setter Property="Margin" Value="1,14,0,4" />
             </Style.Setters>
         </Style>
 
@@ -25,7 +30,7 @@
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="12" />
+            <Setter Property="Padding" Value="10" />
         </Style>
 
         <Style x:Key="PreviewCard" TargetType="Border">
@@ -33,7 +38,7 @@
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="8" />
+            <Setter Property="Padding" Value="6" />
         </Style>
 
         <Style x:Key="Hint" TargetType="TextBlock">
@@ -53,7 +58,7 @@
         </Grid.Resources>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="LeftColumn" Width="1*" />
+            <ColumnDefinition x:Name="LeftColumn" Width="*" MinWidth="500" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition x:Name="RightColumn" Width="2*" />
         </Grid.ColumnDefinitions>
@@ -69,8 +74,8 @@
 
                 <TextBlock Text="轮换" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" />
                 <controls:SettingsCard Header="轮换间隔" Description="多少分钟更换一次壁纸">
-                    <NumberBox x:Name="RotateMinutes" Width="140" Minimum="1" Maximum="1440"
-                               Value="30" SpinButtonPlacementMode="Compact" VerticalAlignment="Center" />
+                    <NumberBox x:Name="RotateMinutes" Width="180" Minimum="1" Maximum="1440"
+                               Value="30" SpinButtonPlacementMode="Inline" VerticalAlignment="Center" />
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="壁纸样式" Description="填充 / 适应 / 拉伸 / 居中 / 平铺">
                     <ComboBox x:Name="StyleCombo" Width="220" SelectedIndex="0"
@@ -192,8 +197,8 @@
                     </ComboBox>
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="最低得分">
-                    <NumberBox x:Name="MinScoreBox" Width="150" Minimum="0"
-                               Maximum="1000000" Value="100" SpinButtonPlacementMode="Compact" VerticalAlignment="Center" />
+                    <NumberBox x:Name="MinScoreBox" Width="180" Minimum="0"
+                               Maximum="1000000" Value="100" SpinButtonPlacementMode="Inline" VerticalAlignment="Center" />
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="跳过 NSFW 内容">
                     <ToggleSwitch x:Name="SkipNsfwToggle" Margin="0" />
@@ -313,25 +318,35 @@
 
         <!-- ==================== 右：图片库 ==================== -->
         <Border Grid.Column="2" MinWidth="520" Style="{StaticResource Card}">
-            <Grid RowSpacing="8">
+            <Grid RowSpacing="6">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="图片库" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock Grid.Row="1" x:Name="ThumbFolderText" Style="{StaticResource Hint}"
-                           Text="未设置保存文件夹" />
-                <TextBlock Grid.Row="2" x:Name="ThumbCountText" Style="{StaticResource Hint}" Text="" />
-                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
-                    <Button Content="刷新" Click="RefreshThumbs_Click" />
-                    <Button Content="打开文件夹" Click="OpenFolder_Click" />
+                <Grid Grid.Row="0" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="图片库" Style="{StaticResource SubtitleTextBlockStyle}"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                        <Button Content="刷新" Click="RefreshThumbs_Click" />
+                        <Button Content="打开文件夹" Click="OpenFolder_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
+                    <TextBlock x:Name="ThumbFolderText" Style="{StaticResource Hint}"
+                               Text="未设置保存文件夹" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="ThumbCountText" Style="{StaticResource Hint}" Text="" />
                 </StackPanel>
-                <GridView Grid.Row="4" x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False"
-                          ItemContainerStyle="{StaticResource ThumbItemStyle}">
+
+                <GridView Grid.Row="2" x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False"
+                          ItemContainerStyle="{StaticResource ThumbItemStyle}"
+                          SizeChanged="ThumbGrid_SizeChanged">
                     <GridView.ItemsPanel>
                         <ItemsPanelTemplate>
                             <ItemsWrapGrid Orientation="Horizontal" ItemWidth="180" ItemHeight="212" />

@@ -531,6 +531,21 @@ public sealed partial class MainWindow : Window
 
     private void RefreshThumbs_Click(object sender, RoutedEventArgs e) => RefreshThumbnails();
 
+    /// <summary>按可用宽度重算列宽：整行铺满，右侧不留大片空白。</summary>
+    private void ApplyThumbLayout()
+    {
+        if (ThumbGrid.ItemsPanelRoot is not ItemsWrapGrid panel) return;
+        var width = ThumbGrid.ActualWidth;
+        if (width <= 0) return;
+
+        const double itemMargin = 8;     // GridViewItem Margin 4 + 4
+        const double minCardWidth = 168;
+        var columns = Math.Max(1, (int)Math.Floor((width + itemMargin) / (minCardWidth + itemMargin)));
+        panel.ItemWidth = Math.Floor(width / columns) - itemMargin;
+    }
+
+    private void ThumbGrid_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyThumbLayout();
+
     private void RefreshThumbnails()
     {
         if (!_uiReady) return;
@@ -566,14 +581,18 @@ public sealed partial class MainWindow : Window
 
         foreach (var path in files)
         {
-            // 固定尺寸卡片：图片框 164x112 + 两行文件名 + 删除按钮，保证每格高度一致
-            var panel = new StackPanel { Spacing = 4, Width = 164, Height = 200 };
+            // 自适应卡片：宽度跟随列宽（窗口变宽就多显示几列，不留右侧空白）
+            var panel = new StackPanel { Spacing = 4, Height = 200, HorizontalAlignment = HorizontalAlignment.Stretch };
 
             var frame = new Border
             {
-                Width = 164,
                 Height = 112,
                 CornerRadius = new CornerRadius(4)
+            };
+            // 图片按比例裁切填充；圆角用 Clip 跟随实际宽度
+            frame.SizeChanged += (_, e) => frame.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry
+            {
+                Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height)
             };
 
             // 背景用主题色（取不到就不加，避免 KeyNotFound）
@@ -583,14 +602,9 @@ public sealed partial class MainWindow : Window
 
             var image = new Image
             {
-                Width = 164,
                 Height = 112,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill,
-                Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(path) }
-            };
-            frame.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry
-            {
-                Rect = new Windows.Foundation.Rect(0, 0, 164, 112)
+                Source = new BitmapImage { DecodePixelWidth = 260, UriSource = new Uri(path) }
             };
             frame.Child = image;
 
@@ -675,6 +689,9 @@ public sealed partial class MainWindow : Window
             panel.Children.Add(buttons);
             ThumbGrid.Items.Add(panel);
         }
+
+        // 布局完成后按实际宽度铺满
+        DispatcherQueue.TryEnqueue(ApplyThumbLayout);
     }
 
     /// <summary>把图片库里的某张图设为当前壁纸（并记入最近使用）。</summary>
