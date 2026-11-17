@@ -481,7 +481,7 @@ public sealed partial class MainWindow : Window
             var dx = e.GetCurrentPoint(root).Position.X - _dragStartRootX;
             var splitterWidth = ((FrameworkElement)sender).ActualWidth;
             var total = root.ActualWidth - splitterWidth;
-            var newLeft = Math.Clamp(_leftStartWidth + dx, 380, Math.Max(380, total - 480));
+            var newLeft = Math.Clamp(_leftStartWidth + dx, 340, Math.Max(340, total - 520));
             LeftColumn.Width = new GridLength(newLeft, GridUnitType.Pixel);
             SetStatus($"分隔条拖动中：Δ={dx:F0} → 左栏 {newLeft:F0}px");
             e.Handled = true;
@@ -513,13 +513,15 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
 
         List<string> files;
+        var total = 0;
         try
         {
-            files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+            var all = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
                 .Where(f => Path.GetExtension(f).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png")
                 .OrderByDescending(f => { try { return File.GetLastWriteTime(f); } catch { return DateTime.MinValue; } })
-                .Take(200)
                 .ToList();
+            total = all.Count;
+            files = all.Take(200).ToList();
         }
         catch (Exception ex)
         {
@@ -527,24 +529,45 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ThumbCountText.Text = files.Count == 0 ? "文件夹里没有图片" : $"共 {files.Count} 张（显示最近 {Math.Min(files.Count, 200)} 张）";
+        ThumbCountText.Text = files.Count == 0
+            ? "文件夹里没有图片"
+            : (total > 200 ? $"共 {total} 张（显示最近 200 张）" : $"共 {total} 张");
 
         foreach (var path in files)
         {
-            var panel = new StackPanel { Spacing = 4, Width = 164, Padding = new Thickness(2) };
+            // 固定尺寸卡片：图片框 164x112 + 两行文件名 + 删除按钮，保证每格高度一致
+            var panel = new StackPanel { Spacing = 4, Width = 164, Height = 200 };
+
+            var frame = new Border
+            {
+                Width = 164,
+                Height = 112,
+                CornerRadius = new CornerRadius(4)
+            };
+
+            // 背景用主题色（取不到就不加，避免 KeyNotFound）
+            if (Application.Current.Resources.TryGetValue("CardBackgroundFillColorSecondaryBrush", out var brushObj) &&
+                brushObj is Microsoft.UI.Xaml.Media.Brush brush)
+                frame.Background = brush;
 
             var image = new Image
             {
-                Width = 160,
-                Height = 110,
-                Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
+                Width = 164,
+                Height = 112,
+                Stretch = Microsoft.UI.Xaml.Media.Stretch.UniformToFill,
                 Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(path) }
             };
+            frame.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry
+            {
+                Rect = new Windows.Foundation.Rect(0, 0, 164, 112)
+            };
+            frame.Child = image;
 
             var name = new TextBlock
             {
                 Text = Path.GetFileName(path),
                 FontSize = 11,
+                Height = 34,
                 TextWrapping = TextWrapping.Wrap,
                 MaxLines = 2,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -555,13 +578,14 @@ public sealed partial class MainWindow : Window
             {
                 Content = "删除",
                 FontSize = 11,
-                Padding = new Thickness(10, 2, 10, 2),
+                Height = 28,
+                Padding = new Thickness(10, 0, 10, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             var captured = path;
             delete.Click += (_, _) => _ = DeleteImageAsync(captured);
 
-            panel.Children.Add(image);
+            panel.Children.Add(frame);
             panel.Children.Add(name);
             panel.Children.Add(delete);
             ThumbGrid.Items.Add(panel);
@@ -585,9 +609,22 @@ public sealed partial class MainWindow : Window
 
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+            // 先释放缩略图对文件的占用，再移动（BitmapImage 可能仍持有句柄）
+            ThumbGrid.Items.Clear();
+            await Task.Delay(80);
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
             var moved = SafeFile.MoveToRecycleBin(path);
             if (!moved)
             {
+                await Task.Delay(300);
+                moved = SafeFile.MoveToRecycleBin(path);
+            }
+
+            if (!moved)
+            {
+                RefreshThumbnails();
                 SetStatus("未移动（文件可能被占用）：" + Path.GetFileName(path));
                 return;
             }

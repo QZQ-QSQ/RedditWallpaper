@@ -7,14 +7,14 @@
     mc:Ignorable="d"
     Title="Reddit 壁纸轮换">
 
-    <Grid Padding="16" ColumnSpacing="16">
+    <Grid Padding="12" ColumnSpacing="8">
         <Grid.Resources>
             <Style x:Key="Card" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
                 <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="8" />
-                <Setter Property="Padding" Value="16" />
+                <Setter Property="Padding" Value="12" />
             </Style>
             <Style x:Key="RowDesc" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
@@ -31,12 +31,12 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="LeftColumn" Width="1*" />
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition x:Name="RightColumn" Width="1.6*" />
+            <ColumnDefinition x:Name="RightColumn" Width="2*" />
         </Grid.ColumnDefinitions>
 
         <!-- ==================== 左：设置与操作 ==================== -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" MinWidth="400">
-            <StackPanel Spacing="16" MinWidth="360">
+        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" MinWidth="340">
+            <StackPanel Spacing="12" MinWidth="320">
 
                 <StackPanel Spacing="4">
                     <TextBlock Text="壁纸轮换" FontSize="28" FontWeight="SemiBold" />
@@ -47,7 +47,7 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel Spacing="12">
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -60,7 +60,7 @@
                                        Value="30" SpinButtonPlacementMode="Compact" VerticalAlignment="Center" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -79,7 +79,7 @@
                             </ComboBox>
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -100,7 +100,7 @@
                             </ComboBox>
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -113,7 +113,7 @@
                                           VerticalAlignment="Center" Margin="0" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -126,7 +126,7 @@
                                           VerticalAlignment="Center" Margin="0" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -147,7 +147,7 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel Spacing="12">
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -157,7 +157,7 @@
                                           VerticalAlignment="Center" Margin="0" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -167,7 +167,7 @@
                                           VerticalAlignment="Center" Margin="0" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -177,7 +177,7 @@
                                           VerticalAlignment="Center" Margin="0" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -200,7 +200,7 @@
                         <StackPanel x:Name="SubredditListPanel" Spacing="6" />
                         <Button Content="＋ 添加社区" Click="AddSubreddit_Click" HorizontalAlignment="Left" />
 
-                        <Grid MinHeight="40" Margin="0,8,0,0">
+                        <Grid MinHeight="36" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -218,7 +218,7 @@
                             </ComboBox>
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -238,7 +238,7 @@
                             </ComboBox>
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -249,7 +249,7 @@
                                        VerticalAlignment="Center" />
                         </Grid>
 
-                        <Grid MinHeight="40">
+                        <Grid MinHeight="36">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -328,7 +328,7 @@
                         <Border Style="{StaticResource Card}" Padding="12">
                             <StackPanel Spacing="12">
 
-                                <Grid MinHeight="40">
+                                <Grid MinHeight="36">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
@@ -397,12 +397,12 @@
         </ScrollViewer>
 
         <!-- 拖拽分隔条 -->
-        <Border Grid.Column="1" Width="10" HorizontalAlignment="Stretch" Background="Transparent"
+        <Border Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent"
                 PointerPressed="Splitter_PointerPressed" PointerMoved="Splitter_PointerMoved"
                 PointerReleased="Splitter_PointerReleased" PointerCanceled="Splitter_PointerReleased" />
 
         <!-- ==================== 图片库 ==================== -->
-        <Border Grid.Column="2" MinWidth="420" Style="{StaticResource Card}">
+        <Border Grid.Column="2" MinWidth="520" Style="{StaticResource Card}">
             <Grid RowSpacing="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
