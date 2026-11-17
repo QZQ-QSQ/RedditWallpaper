@@ -75,6 +75,13 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(
             (int)Math.Round(1440 * dpiScale), (int)Math.Round(880 * dpiScale)));
 
+        // 双栏布局的最小尺寸：左栏 500 + 右栏 520 + 分隔条/内边距，低于此值会裁切内容
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = (int)Math.Round(1060 * dpiScale);
+            presenter.PreferredMinimumHeight = (int)Math.Round(640 * dpiScale);
+        }
+
         // 关闭窗口 → 收进托盘继续轮换
         AppWindow.Closing += OnWindowClosing;
         try
