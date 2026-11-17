@@ -500,6 +500,16 @@ public sealed partial class MainWindow : Window
 
     // ---------------- 中间栏：图片浏览 ----------------
 
+    private int _thumbTotal;
+    private int _thumbShown;
+
+    private void UpdateThumbCountText()
+    {
+        ThumbCountText.Text = _thumbShown == 0
+            ? "文件夹里没有图片"
+            : (_thumbTotal > 200 ? $"共 {_thumbTotal} 张（显示最近 200 张）" : $"共 {_thumbTotal} 张");
+    }
+
     private void RefreshThumbs_Click(object sender, RoutedEventArgs e) => RefreshThumbnails();
 
     private void RefreshThumbnails()
@@ -532,6 +542,8 @@ public sealed partial class MainWindow : Window
         ThumbCountText.Text = files.Count == 0
             ? "文件夹里没有图片"
             : (total > 200 ? $"共 {total} 张（显示最近 200 张）" : $"共 {total} 张");
+        _thumbTotal = total;
+        _thumbShown = files.Count;
 
         foreach (var path in files)
         {
@@ -583,7 +595,7 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             var captured = path;
-            delete.Click += (_, _) => _ = DeleteImageAsync(captured);
+            bool pendingDelete = false;
 
             var setBtn = new Button
             {
@@ -593,7 +605,36 @@ public sealed partial class MainWindow : Window
                 Padding = new Thickness(4, 0, 4, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            setBtn.Click += (_, _) => _ = SetWallpaperFromLibraryAsync(captured);
+
+            delete.Click += (_, _) =>
+            {
+                if (!pendingDelete)
+                {
+                    // 第一步：卡片进入确认态（不弹窗、不打断其他卡片）
+                    pendingDelete = true;
+                    panel.Opacity = 0.65;
+                    delete.Content = "确认删除";
+                    setBtn.Content = "取消";
+                    return;
+                }
+                // 第二步：确认 → 移到回收站并平滑移除该卡片
+                pendingDelete = false;
+                _ = DeleteConfirmedAsync(captured, panel, setBtn, delete);
+            };
+
+            setBtn.Click += (_, _) =>
+            {
+                if (pendingDelete)
+                {
+                    // 取消确认态
+                    pendingDelete = false;
+                    panel.Opacity = 1;
+                    delete.Content = "删除";
+                    setBtn.Content = "设为壁纸";
+                    return;
+                }
+                _ = SetWallpaperFromLibraryAsync(captured);
+            };
 
             var buttons = new Grid { ColumnSpacing = 4, Height = 28 };
             buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -647,54 +688,54 @@ public sealed partial class MainWindow : Window
         await Task.CompletedTask;
     }
 
-    private async Task DeleteImageAsync(string path)
+    /// <summary>
+    /// 删除流程（卡片内两步确认后调用）：
+    /// 释放该卡片对图片的占用 → 移到回收站 → 只移除这一张卡片，不整列重建。
+    /// </summary>
+    private async Task DeleteConfirmedAsync(string path, StackPanel panel, Button setBtn, Button deleteBtn)
     {
         try
         {
-            // 先让用户确认，再移到回收站（可恢复）
-            var dialog = new ContentDialog
-            {
-                Title = "移到回收站？",
-                Content = "将把这张图片移到回收站：\n" + Path.GetFileName(path),
-                PrimaryButtonText = "移到回收站",
-                CloseButtonText = "取消",
-                DefaultButton = ContentDialogButton.Close,
-                XamlRoot = Content.XamlRoot
-            };
-
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-            // 先释放缩略图对文件的占用，再移动（BitmapImage 可能仍持有句柄）
-            ThumbGrid.Items.Clear();
-            await Task.Delay(80);
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            // 释放该卡片缩略图对文件的占用
+            if (panel.Children.OfType<Border>().FirstOrDefault() is Border f) f.Child = null;
+            await Task.Delay(150);
 
             var moved = SafeFile.MoveToRecycleBin(path);
             if (!moved)
             {
-                await Task.Delay(300);
+                await Task.Delay(400);
                 moved = SafeFile.MoveToRecycleBin(path);
             }
 
-            if (!moved)
+            if (moved)
             {
-                RefreshThumbnails();
-                SetStatus("未移动（文件可能被占用）：" + Path.GetFileName(path));
-                return;
+                ThumbGrid.Items.Remove(panel);   // 只移除这一张，其他卡片不动
+                _settings.RecentImages.RemoveAll(p =>
+                    string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+                SettingsService.Save(_settings);
+                RefreshHistory();
+                UpdateThumbCountText();
+                SetStatus("已移到回收站：" + Path.GetFileName(path));
             }
-
-            _settings.RecentImages.RemoveAll(p =>
-                string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-            SettingsService.Save(_settings);
-            RefreshHistory();
-            RefreshThumbnails();
-            SetStatus("已移到回收站：" + Path.GetFileName(path));
+            else
+            {
+                RestoreCardAfterDelete(panel, setBtn, deleteBtn);
+                SetStatus("未能移到回收站（文件可能被占用）：" + Path.GetFileName(path));
+            }
         }
         catch (Exception ex)
         {
+            RestoreCardAfterDelete(panel, setBtn, deleteBtn);
             SetStatus("删除失败：" + Path.GetFileName(path) + " - " + ex.Message);
         }
+        await Task.CompletedTask;
+    }
+
+    private static void RestoreCardAfterDelete(StackPanel panel, Button setBtn, Button deleteBtn)
+    {
+        panel.Opacity = 1;
+        setBtn.Content = "设为壁纸";
+        deleteBtn.Content = "删除";
     }
 
     // ---------------- 托盘 / 窗口 ----------------
