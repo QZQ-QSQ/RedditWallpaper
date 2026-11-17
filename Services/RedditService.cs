@@ -49,8 +49,11 @@ public sealed class RedditService
 
     private static bool IsValidSort(string sort) => Sorts.Contains(sort);
 
-    /// <summary>尝试从 Reddit 获取一张图片并下载到保存文件夹；失败返回 Error 原因。</summary>
-    public async Task<DownloadResult> TryDownloadWallpaperAsync(AppSettings s, string saveFolder)
+    /// <summary>候选抓取结果（预览队列与轮换共用）。</summary>
+    public sealed record CandidateBatch(List<RedditImage>? Candidates, string? Note, List<string> Errors);
+
+    /// <summary>抓取候选列表（只取元数据，不下载图片）。</summary>
+    public async Task<CandidateBatch> BuildCandidatesAsync(AppSettings s)
     {
         var randomMode = s.RedditSort == "random";
         if (randomMode)
@@ -75,7 +78,7 @@ public sealed class RedditService
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => x.Trim().TrimStart('r', '/').TrimStart('/')));
 
-        if (subs.Length == 0) return DownloadResult.Fail("未填写社区名称");
+        if (subs.Length == 0) return new CandidateBatch(null, null, new List<string> { "未填写社区名称" });
 
         var errors = new List<string>();
         List<RedditImage>? candidates = null;
@@ -143,7 +146,27 @@ public sealed class RedditService
         }
 
         if (candidates is null || candidates.Count == 0)
-            return DownloadResult.Fail(string.Join("；", errors));
+            return new CandidateBatch(null, note, errors);
+
+        return new CandidateBatch(candidates, note, errors);
+    }
+
+    /// <summary>尝试从 Reddit 获取一张图片并下载到保存文件夹；失败返回 Error 原因。</summary>
+    public async Task<DownloadResult> TryDownloadWallpaperAsync(AppSettings s, string saveFolder)
+    {
+        var randomMode = s.RedditSort == "random";
+        var batch = await BuildCandidatesAsync(s);
+        var candidates = batch.Candidates;
+        var note = batch.Note;
+        var errors = batch.Errors;
+
+        var http = NetworkHelper.GetClient(s, NetworkHelper.RedditUserAgent);
+        var subs = string.Join("+", s.Subreddits
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.Trim().TrimStart('r', '/').TrimStart('/')));
+
+        if (candidates is null || candidates.Count == 0)
+            return DownloadResult.Fail(errors.Count > 0 ? string.Join("；", errors) : "没有候选图片");
 
         candidates.RemoveAll(c => _resolutionSkip.Contains(c.Id));
         if (candidates.Count == 0)
@@ -163,7 +186,8 @@ public sealed class RedditService
         // 第一轮：跳过已经下载过的帖子，选没见过的新图
         foreach (var img in candidates)
         {
-            var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
+            if (s.ShouldSkipDownload(FileNameFor(img))) continue;   // 用户删过的不再下载
+            var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, s);
             if (path is null) continue;
             if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
             return DownloadResult.Ok(path, note);
@@ -182,7 +206,7 @@ public sealed class RedditService
             }
             foreach (var img in candidates)
             {
-                var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
+                var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, s);
                 if (path is null) continue;
                 if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
                 return DownloadResult.Ok(path, note);
@@ -199,7 +223,8 @@ public sealed class RedditService
         // 兜底：再完整下载一次
         foreach (var img in candidates)
         {
-            var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
+            if (s.ShouldSkipDownload(FileNameFor(img))) continue;   // 用户删过的不再下载
+            var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, s);
             if (path is null) continue;
             if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
             return DownloadResult.Ok(path, note);
@@ -208,6 +233,33 @@ public sealed class RedditService
         if (mismatch > 0)
             return DownloadResult.Fail($"有 {mismatch} 张图片不符合最低分辨率 {s.WallpaperResolution}，已删除未保存（可调低「最低分辨率」）");
         return DownloadResult.Fail($"解析到 {candidates.Count} 个候选但下载全部失败（网络、图片域名被墙或存储权限）");
+    }
+
+    /// <summary>按与下载一致的命名规则算出候选最终会使用的文件名（不含路径）。</summary>
+    public static string FileNameFor(RedditImage img)
+    {
+        var ext = Path.GetExtension(new Uri(img.Url).AbsolutePath).ToLowerInvariant();
+        if (ext == ".jpeg") ext = ".jpg";   // 下载时按 Content-Type 统一存成 .jpg
+        if (ext is not (".jpg" or ".png")) ext = ".jpg";
+        return FileNameHelper.FromSlug(img.Slug, img.Url, $"reddit_{img.Id}", ext);
+    }
+
+    /// <summary>下载指定候选（预览队列消费时使用）。</summary>
+    public async Task<DownloadResult> TryDownloadCandidateAsync(AppSettings s, string saveFolder, RedditImage img)
+    {
+        var http = NetworkHelper.GetClient(s, NetworkHelper.RedditUserAgent);
+        var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, s);
+        if (path is null) return DownloadResult.Fail("下载失败（可能已舍弃或存在同名文件）");
+        if (!AcceptResolution(path, s))
+            return DownloadResult.Fail($"不符合最低分辨率 {s.WallpaperResolution}");
+        return DownloadResult.Ok(path);
+    }
+
+    /// <summary>把候选下载到缓存目录（供预览缩略图使用，不进入图片库）。</summary>
+    public async Task<string?> PrefetchAsync(AppSettings s, RedditImage img, string folder)
+    {
+        var http = NetworkHelper.GetClient(s, NetworkHelper.RedditUserAgent);
+        return await DownloadImageAsync(http, img.Url, folder, img.Id, img.Slug, s.RedditBaseUrl, s);
     }
 
     /// <summary>检查分辨率；不符合时只清理"本次运行由程序自己下载"的文件（进回收站），其余不动。</summary>
@@ -625,7 +677,7 @@ public sealed class RedditService
         url.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<string?> DownloadImageAsync(HttpClient http, string url, string folder,
-        string id, string slug, string? baseUrl = null)
+        string id, string slug, string? baseUrl = null, AppSettings? settings = null)
     {
         try
         {
@@ -656,6 +708,9 @@ public sealed class RedditService
             if (ext is not (".jpg" or ".jpeg" or ".png")) return null;
 
             var path = Path.Combine(folder, FileNameHelper.FromSlug(slug, url, $"reddit_{id}", ext));
+
+            // 用户在图片库里删过的图不再下载（按文件名主干判断）
+            if (settings?.ShouldSkipDownload(Path.GetFileName(path)) == true) return null;
 
             // 绝不覆盖已存在的文件（可能是用户自己的同名图片）
             if (File.Exists(path)) return null;

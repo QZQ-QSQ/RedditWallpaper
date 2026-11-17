@@ -8,7 +8,8 @@
     mc:Ignorable="d"
     Title="Reddit 壁纸轮换">
 
-    <Grid.Resources>
+    <Grid Padding="12" ColumnSpacing="8" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.Resources>
         <x:Double x:Key="SettingsCardSpacing">4</x:Double>
 
         <Style x:Key="SettingsSectionHeaderTextBlockStyle"
@@ -27,6 +28,14 @@
             <Setter Property="Padding" Value="12" />
         </Style>
 
+        <Style x:Key="PreviewCard" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorSecondaryBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="8" />
+        </Style>
+
         <Style x:Key="Hint" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Opacity" Value="0.7" />
@@ -41,9 +50,8 @@
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="MinHeight" Value="0" />
         </Style>
-    </Grid.Resources>
+        </Grid.Resources>
 
-    <Grid Padding="12" ColumnSpacing="8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="LeftColumn" Width="1*" />
             <ColumnDefinition Width="Auto" />
@@ -62,7 +70,7 @@
                 <TextBlock Text="轮换" Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" />
                 <controls:SettingsCard Header="轮换间隔" Description="多少分钟更换一次壁纸">
                     <NumberBox x:Name="RotateMinutes" Width="140" Minimum="1" Maximum="1440"
-                               Value="30" SpinButtonPlacementMode="Compact" />
+                               Value="30" SpinButtonPlacementMode="Compact" VerticalAlignment="Center" />
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="壁纸样式" Description="填充 / 适应 / 拉伸 / 居中 / 平铺">
                     <ComboBox x:Name="StyleCombo" Width="220" SelectedIndex="0"
@@ -118,6 +126,48 @@
                         <TextBlock Text="一行一个社区，勾选右侧「使用」表示启用" Style="{StaticResource Hint}" />
                         <StackPanel x:Name="SubredditListPanel" Spacing="6" />
                         <Button Content="＋ 添加社区" Click="AddSubreddit_Click" HorizontalAlignment="Left" />
+
+                        <TextBlock Text="队列预览（轮换前可先舍弃）" FontWeight="SemiBold" Margin="0,6,0,0" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource PreviewCard}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="上一张" Style="{StaticResource Hint}" />
+                                    <Border Height="92" CornerRadius="4"
+                                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                                        <Image x:Name="PrevThumb" Stretch="UniformToFill" />
+                                    </Border>
+                                    <TextBlock x:Name="PrevTitle" Style="{StaticResource Hint}" Height="30"
+                                               MaxLines="2" TextTrimming="CharacterEllipsis" Text="还没有换过壁纸" />
+                                    <Button x:Name="DiscardPrevBtn" Content="舍弃" Height="28" FontSize="11"
+                                            HorizontalAlignment="Stretch" IsEnabled="False"
+                                            Click="DiscardPrev_Click" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Style="{StaticResource PreviewCard}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="下一张" Style="{StaticResource Hint}" />
+                                    <Border Height="92" CornerRadius="4"
+                                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                                        <Image x:Name="NextThumb" Stretch="UniformToFill" />
+                                    </Border>
+                                    <TextBlock x:Name="NextTitle" Style="{StaticResource Hint}" Height="30"
+                                               MaxLines="2" TextTrimming="CharacterEllipsis" Text="尚未获取队列" />
+                                    <Button x:Name="DiscardNextBtn" Content="舍弃" Height="28" FontSize="11"
+                                            HorizontalAlignment="Stretch" IsEnabled="False"
+                                            Click="DiscardNext_Click" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Button x:Name="RestoreDiscardBtn" FontSize="11" HorizontalAlignment="Left"
+                                Content="已舍弃 0 张 · 全部恢复" Visibility="Collapsed"
+                                Click="RestoreDiscard_Click" />
                     </StackPanel>
                 </Border>
                 <controls:SettingsCard Header="排序方式">
@@ -143,7 +193,7 @@
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="最低得分">
                     <NumberBox x:Name="MinScoreBox" Width="150" Minimum="0"
-                               Maximum="1000000" Value="100" SpinButtonPlacementMode="Compact" />
+                               Maximum="1000000" Value="100" SpinButtonPlacementMode="Compact" VerticalAlignment="Center" />
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="跳过 NSFW 内容">
                     <ToggleSwitch x:Name="SkipNsfwToggle" Margin="0" />
@@ -237,6 +287,10 @@
                             <Button x:Name="ClearSessionBtn" Grid.Column="1" Content="退出登录"
                                     HorizontalAlignment="Stretch" Click="ClearSession_Click" />
                         </Grid>
+                        <TextBlock Text="图片库删除记录" FontWeight="SemiBold" Margin="1,8,0,0" />
+                        <TextBlock x:Name="DeletedHintText" Style="{StaticResource Hint}" Text="" />
+                        <Button x:Name="ClearDeletedBtn" HorizontalAlignment="Stretch"
+                                Content="清除「不再下载」记录" Click="ClearDeleted_Click" />
                         <TextBlock Text="网络 / 反代 / Devvit" FontWeight="SemiBold" Margin="1,8,0,0" />
                         <TextBox x:Name="RedditBaseUrlBox" Header="自定义 Reddit 反代（可选）"
                                  PlaceholderText="https://reddit.example.com" />

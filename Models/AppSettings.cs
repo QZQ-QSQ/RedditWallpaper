@@ -55,6 +55,62 @@ public class AppSettings
     /// <summary>最近用过的图片路径（用于避免连续重复）</summary>
     public List<string> RecentImages { get; set; } = new();
 
+    /// <summary>用户在图片库里删除过的图片（文件名主干，不含扩展名）：之后不再自动下载同一张</summary>
+    public List<string> DeletedImageNames { get; set; } = new();
+
+    /// <summary>用户点过「舍弃」的图片（文件名主干，不含扩展名）：下载前跳过；再点一次可恢复</summary>
+    public List<string> DiscardedImageNames { get; set; } = new();
+
+    /// <summary>某个文件名是否被用户删除过（比较不含扩展名的主干，忽略大小写）</summary>
+    public bool IsDeletedImageName(string fileName)
+    {
+        if (DeletedImageNames.Count == 0 || string.IsNullOrWhiteSpace(fileName)) return false;
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        foreach (var n in DeletedImageNames)
+            if (string.Equals(n, stem, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>某个文件名是否被用户「舍弃」（不下载，但可恢复）</summary>
+    public bool IsDiscardedImageName(string fileName)
+    {
+        if (DiscardedImageNames.Count == 0 || string.IsNullOrWhiteSpace(fileName)) return false;
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        foreach (var n in DiscardedImageNames)
+            if (string.Equals(n, stem, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>下载前的统一拦截：删除过或舍弃过都不下载</summary>
+    public bool ShouldSkipDownload(string fileName) =>
+        IsDeletedImageName(fileName) || IsDiscardedImageName(fileName);
+
+    /// <summary>切换舍弃状态，返回切换后是否仍处于舍弃状态。</summary>
+    public bool ToggleDiscardedImage(string fileName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(stem)) return false;
+        if (IsDiscardedImageName(stem))
+        {
+            DiscardedImageNames.RemoveAll(n => string.Equals(n, stem, StringComparison.OrdinalIgnoreCase));
+            return false;
+        }
+        DiscardedImageNames.Insert(0, stem);
+        if (DiscardedImageNames.Count > 1000)
+            DiscardedImageNames.RemoveRange(1000, DiscardedImageNames.Count - 1000);
+        return true;
+    }
+
+    /// <summary>记录一个"不再下载"的文件名主干（最新的排最前，最多保留 1000 条）</summary>
+    public void RememberDeletedImage(string fileName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(stem)) return;
+        DeletedImageNames.RemoveAll(n => string.Equals(n, stem, StringComparison.OrdinalIgnoreCase));
+        DeletedImageNames.Insert(0, stem);
+        if (DeletedImageNames.Count > 1000) DeletedImageNames.RemoveRange(1000, DeletedImageNames.Count - 1000);
+    }
+
     /// <summary>是否使用 OAuth 账号/API 方式（否则走公开 JSON 接口）</summary>
     public bool UseOAuth { get; set; } = false;
     public string ClientId { get; set; } = "";

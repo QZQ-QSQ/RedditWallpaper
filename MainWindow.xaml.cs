@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -29,6 +30,13 @@ public sealed partial class MainWindow : Window
     private bool _exiting;
     private bool _uiReady;
 
+    // ---------- 轮换预览队列 ----------
+    private readonly List<RedditService.RedditImage> _queue = new();
+    private string? _queueSignature;
+    private string? _prevPreviewPath;
+    private string? _nextName;
+    private bool _previewBusy;
+
     /// <summary>供 App.OnLaunched 判断是否需要"启动即隐藏"</summary>
     public static bool StartHidden { get; private set; }
 
@@ -52,7 +60,9 @@ public sealed partial class MainWindow : Window
         _settings = SettingsService.Load();
         LoadSettingsToUi();
         RefreshHistory();
+        RefreshDeletedHint();
         _uiReady = true;
+        _ = RefreshPreviewAsync();
 
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _tickTimer.Tick += (_, _) => OnTick();
@@ -211,6 +221,7 @@ public sealed partial class MainWindow : Window
             "RedditWallpaper", "settings.json");
         SetStatus($"设置已保存：{path}");
         RefreshThumbnails();
+        _ = RefreshPreviewAsync();
     }
 
     // ---------------- 社区列表 ----------------
@@ -594,9 +605,13 @@ public sealed partial class MainWindow : Window
                 Opacity = 0.8
             };
 
+            var fileName = Path.GetFileName(path);
+            AutomationProperties.SetName(panel, fileName);
+
             var delete = new Button
             {
                 Content = "删除",
+                Tag = fileName,
                 FontSize = 11,
                 Height = 28,
                 Padding = new Thickness(10, 0, 10, 0),
@@ -608,11 +623,14 @@ public sealed partial class MainWindow : Window
             var setBtn = new Button
             {
                 Content = "设为壁纸",
+                Tag = fileName,
                 FontSize = 11,
                 Height = 28,
                 Padding = new Thickness(4, 0, 4, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
+            SetCardButtonLabel(delete, "删除");
+            SetCardButtonLabel(setBtn, "设为壁纸");
 
             delete.Click += (_, _) =>
             {
@@ -621,8 +639,8 @@ public sealed partial class MainWindow : Window
                     // 第一步：卡片进入确认态（不弹窗、不打断其他卡片）
                     pendingDelete = true;
                     panel.Opacity = 0.65;
-                    delete.Content = "确认删除";
-                    setBtn.Content = "取消";
+                    SetCardButtonLabel(delete, "确认删除");
+                    SetCardButtonLabel(setBtn, "取消");
                     return;
                 }
                 // 第二步：确认 → 移到回收站并平滑移除该卡片
@@ -637,8 +655,8 @@ public sealed partial class MainWindow : Window
                     // 取消确认态
                     pendingDelete = false;
                     panel.Opacity = 1;
-                    delete.Content = "删除";
-                    setBtn.Content = "设为壁纸";
+                    SetCardButtonLabel(delete, "删除");
+                    SetCardButtonLabel(setBtn, "设为壁纸");
                     return;
                 }
                 _ = SetWallpaperFromLibraryAsync(captured);
@@ -718,12 +736,14 @@ public sealed partial class MainWindow : Window
             if (moved)
             {
                 ThumbGrid.Items.Remove(panel);   // 只移除这一张，其他卡片不动
+                _settings.RememberDeletedImage(path);   // 记住：以后不再自动下载这张
                 _settings.RecentImages.RemoveAll(p =>
                     string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
                 SettingsService.Save(_settings);
                 RefreshHistory();
+                RefreshDeletedHint();
                 UpdateThumbCountText();
-                SetStatus("已移到回收站：" + Path.GetFileName(path));
+                SetStatus("已移到回收站：" + Path.GetFileName(path) + "（以后不会再自动下载这张）");
             }
             else
             {
@@ -742,8 +762,275 @@ public sealed partial class MainWindow : Window
     private static void RestoreCardAfterDelete(StackPanel panel, Button setBtn, Button deleteBtn)
     {
         panel.Opacity = 1;
-        setBtn.Content = "设为壁纸";
-        deleteBtn.Content = "删除";
+        SetCardButtonLabel(setBtn, "设为壁纸");
+        SetCardButtonLabel(deleteBtn, "删除");
+    }
+
+    /// <summary>卡片按钮同时更新可见文字与无障碍名称（读屏会念出文件名）。</summary>
+    private static void SetCardButtonLabel(Button button, string text)
+    {
+        button.Content = text;
+        AutomationProperties.SetName(button,
+            button.Tag is string file ? $"{text} {file}" : text);
+    }
+
+    /// <summary>刷新「不再下载」记录的提示文字。</summary>
+    private void RefreshDeletedHint()
+    {
+        DeletedHintText.Text = _settings.DeletedImageNames.Count == 0
+            ? "目前没有「不再下载」的图片。"
+            : $"已记录 {_settings.DeletedImageNames.Count} 张删除过的图片，不会再自动下载。";
+    }
+
+    /// <summary>清除删除记录（重新允许下载这些图）。</summary>
+    private void ClearDeleted_Click(object sender, RoutedEventArgs e)
+    {
+        var n = _settings.DeletedImageNames.Count;
+        if (n == 0)
+        {
+            SetStatus("「不再下载」记录本来就是空的。");
+            return;
+        }
+        _settings.DeletedImageNames.Clear();
+        SettingsService.Save(_settings);
+        RefreshDeletedHint();
+        SetStatus($"已清除 {n} 条「不再下载」记录，这些图以后可能重新下载。");
+    }
+
+    // ---------------- 轮换预览队列 ----------------
+
+    /// <summary>队列的"配置指纹"：影响候选列表的设置一变就重建队列。</summary>
+    private static string QueueSignature(AppSettings s) =>
+        $"{s.UseReddit}|{s.Subreddits}|{s.RedditSort}|{s.RedditTimeRange}|{s.RedditMinScore}|" +
+        $"{s.SkipNsfw}|{s.WallpaperResolution}|{s.UseOAuth}|{s.RedditBaseUrl}";
+
+    private static void SetPreviewThumb(Image image, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            image.Source = null;
+            return;
+        }
+        image.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(path) };
+    }
+
+    /// <summary>按当前舍弃状态刷新按钮文字（Text 同时作为无障碍名称）。</summary>
+    private void UpdateDiscardButton(Button button, string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            button.IsEnabled = false;
+            button.Content = "舍弃";
+            AutomationProperties.SetName(button, "舍弃");
+            return;
+        }
+
+        if (_settings.IsDeletedImageName(fileName))
+        {
+            button.IsEnabled = false;
+            button.Content = "已删除 · 不再下载";
+            AutomationProperties.SetName(button, $"已删除，不再下载 {fileName}");
+            return;
+        }
+
+        button.IsEnabled = true;
+        var discarded = _settings.IsDiscardedImageName(fileName);
+        button.Content = discarded ? "已舍弃 · 点击恢复" : "舍弃";
+        AutomationProperties.SetName(button, $"{(discarded ? "恢复" : "舍弃")} {fileName}");
+    }
+
+    private void UpdateRestoreButton()
+    {
+        var n = _settings.DiscardedImageNames.Count;
+        RestoreDiscardBtn.Content = $"已舍弃 {n} 张 · 全部恢复";
+        RestoreDiscardBtn.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 刷新「上一张 / 下一张」预览：上一张取当前壁纸，下一张取队列头并提前下载到缓存。
+    /// 失败不打扰用户，只把原因写在卡片说明里。
+    /// </summary>
+    private async Task RefreshPreviewAsync()
+    {
+        if (_previewBusy) return;
+        _previewBusy = true;
+        try
+        {
+            var s = ReadSettingsFromUi();
+
+            // ---------- 上一张 ----------
+            var prev = CurrentWallpaperText.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(prev) || !File.Exists(prev))
+                prev = s.RecentImages.FirstOrDefault(File.Exists);
+            _prevPreviewPath = prev;
+            SetPreviewThumb(PrevThumb, prev);
+            PrevTitle.Text = string.IsNullOrWhiteSpace(prev) ? "还没有换过壁纸" : Path.GetFileName(prev);
+            UpdateDiscardButton(DiscardPrevBtn, string.IsNullOrWhiteSpace(prev) ? null : Path.GetFileName(prev));
+
+            UpdateRestoreButton();
+
+            // ---------- 下一张 ----------
+            if (!s.UseReddit)
+            {
+                _queue.Clear();
+                _queueSignature = null;
+                _nextName = null;
+                SetPreviewThumb(NextThumb, null);
+                NextTitle.Text = "未启用 Reddit 来源";
+                UpdateDiscardButton(DiscardNextBtn, null);
+                return;
+            }
+
+            var signature = QueueSignature(s);
+            if (!string.Equals(signature, _queueSignature, StringComparison.Ordinal))
+            {
+                _queueSignature = signature;
+                _queue.Clear();
+            }
+
+            if (_queue.Count == 0)
+            {
+                NextTitle.Text = "正在获取候选…";
+                var batch = await _reddit.BuildCandidatesAsync(s);
+                var redditFolder = string.IsNullOrWhiteSpace(s.SaveFolder) ? "" : SourceFolder(s.SaveFolder, "reddit");
+                foreach (var c in batch.Candidates ?? new List<RedditService.RedditImage>())
+                {
+                    // 删除过 / 舍弃过 / 图片库里已有同名文件 → 不进队列
+                    var name = RedditService.FileNameFor(c);
+                    if (s.ShouldSkipDownload(name)) continue;
+                    if (redditFolder.Length > 0 && File.Exists(Path.Combine(redditFolder, name))) continue;
+                    _queue.Add(c);
+                }
+            }
+
+            if (_queue.Count == 0)
+            {
+                _nextName = null;
+                SetPreviewThumb(NextThumb, null);
+                NextTitle.Text = "没有新的候选（都已下载过或已舍弃）";
+                UpdateDiscardButton(DiscardNextBtn, null);
+                return;
+            }
+
+            var next = _queue[0];
+            _nextName = RedditService.FileNameFor(next);
+            NextTitle.Text = _nextName;
+            UpdateDiscardButton(DiscardNextBtn, _nextName);
+
+            PreviewCache.Cleanup(TimeSpan.FromDays(3));
+            var cached = PreviewCache.Find(_nextName);
+            if (cached is null)
+            {
+                NextTitle.Text = _nextName + "（正在预取…）";
+                cached = await _reddit.PrefetchAsync(s, next, PreviewCache.CacheDir);
+            }
+
+            if (cached is not null && File.Exists(cached))
+            {
+                // 缓存文件名可能与预估扩展名不同（按 Content-Type 落盘），以实际文件为准
+                _nextName = Path.GetFileName(cached);
+                NextTitle.Text = _nextName;
+                UpdateDiscardButton(DiscardNextBtn, _nextName);
+                SetPreviewThumb(NextThumb, cached);
+            }
+            else
+            {
+                SetPreviewThumb(NextThumb, null);
+                NextTitle.Text = _nextName + "（预取失败，轮换时会再试）";
+            }
+        }
+        catch (Exception ex)
+        {
+            NextTitle.Text = "预览获取失败：" + ex.Message;
+        }
+        finally
+        {
+            _previewBusy = false;
+        }
+    }
+
+    private void DiscardPrev_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_prevPreviewPath)) return;
+        var name = Path.GetFileName(_prevPreviewPath);
+        var discarded = _settings.ToggleDiscardedImage(name);
+        SettingsService.Save(_settings);
+        UpdateDiscardButton(DiscardPrevBtn, name);
+        UpdateRestoreButton();
+        SetStatus(discarded
+            ? $"已舍弃「{name}」：以后不会再自动下载，再点一次恢复。"
+            : $"已恢复「{name}」：允许再次下载。");
+    }
+
+    private void DiscardNext_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_nextName)) return;
+        var name = _nextName;
+        var discarded = _settings.ToggleDiscardedImage(name);
+        SettingsService.Save(_settings);
+        UpdateDiscardButton(DiscardNextBtn, name);
+        UpdateRestoreButton();
+        SetStatus(discarded
+            ? $"已舍弃「{name}」：这一张不会被下载，再点一次恢复。"
+            : $"已恢复「{name}」：允许下载。");
+    }
+
+    private async void RestoreDiscard_Click(object sender, RoutedEventArgs e)
+    {
+        var n = _settings.DiscardedImageNames.Count;
+        if (n == 0) return;
+        _settings.DiscardedImageNames.Clear();
+        SettingsService.Save(_settings);
+        UpdateRestoreButton();
+        SetStatus($"已恢复 {n} 张被舍弃的图片。");
+        await RefreshPreviewAsync();
+    }
+
+    /// <summary>从预览队列取下一张：优先用已预取的缓存，失败再走正常下载；舍弃/删除过的跳过。</summary>
+    private async Task<RedditService.DownloadResult> TakeFromQueueAsync(AppSettings s, string saveFolder)
+    {
+        var lastError = "队列为空";
+        while (_queue.Count > 0)
+        {
+            var img = _queue[0];
+            _queue.RemoveAt(0);
+
+            var fileName = RedditService.FileNameFor(img);
+            if (s.ShouldSkipDownload(fileName))
+            {
+                PreviewCache.Remove(PreviewCache.Find(fileName));
+                lastError = $"「{fileName}」已舍弃，跳过";
+                continue;
+            }
+            if (File.Exists(Path.Combine(saveFolder, fileName)))
+            {
+                PreviewCache.Remove(PreviewCache.Find(fileName));
+                lastError = $"「{fileName}」图片库里已有，跳过";
+                continue;
+            }
+
+            var cached = PreviewCache.Find(fileName);
+            var path = cached is null ? null : PreviewCache.Commit(cached, saveFolder);
+            if (path is null)
+            {
+                var r = await _reddit.TryDownloadCandidateAsync(s, saveFolder, img);
+                if (r.Path is null)
+                {
+                    lastError = $"{fileName}: {r.Error}";
+                    continue;
+                }
+                return r;
+            }
+
+            if (!ImageSize.Matches(path, s.WallpaperResolution))
+            {
+                SafeFile.DeleteOwned(path);   // 本次程序新建的文件才允许清理
+                lastError = $"「{fileName}」不符合最低分辨率 {s.WallpaperResolution}";
+                continue;
+            }
+            return RedditService.DownloadResult.Ok(path);
+        }
+        return RedditService.DownloadResult.Fail(lastError);
     }
 
     // ---------------- 托盘 / 窗口 ----------------
@@ -883,6 +1170,15 @@ public sealed partial class MainWindow : Window
                                 if (result is null) errors.Add("Devvit: " + d.Error);
                                 else note = d.Note;
                             }
+                            if (result is null && _queue.Count > 0 &&
+                                string.Equals(QueueSignature(s), _queueSignature, StringComparison.Ordinal))
+                            {
+                                // 预览队列里的「下一张」优先（已预取就直接落盘）
+                                var q = await TakeFromQueueAsync(s, SourceFolder(s.SaveFolder, "reddit"));
+                                result = q.Path;
+                                if (result is null) errors.Add("Reddit 队列: " + q.Error);
+                                else note = "按预览队列顺序";
+                            }
                             if (result is null)
                             {
                                 var r = await _reddit.TryDownloadWallpaperAsync(s, SourceFolder(s.SaveFolder, "reddit"));
@@ -937,6 +1233,9 @@ public sealed partial class MainWindow : Window
                     (note is null ? "" : "；" + note) +
                     (oauthIncomplete ? "；注意：OAuth 缺少 Client ID，本次未使用账号密码" : ""));
                 CurrentWallpaperText.Text = result;
+
+                // 队列前进一格，重新预取「下一张」
+                _ = RefreshPreviewAsync();
             }
             else
             {

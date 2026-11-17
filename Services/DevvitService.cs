@@ -66,7 +66,7 @@ public sealed class DevvitService
 
             foreach (var item in items)
             {
-                var path = await DownloadAsync(http, item, saveFolder);
+                var path = await DownloadAsync(http, item, saveFolder, s);
                 if (path is null) continue;
                 if (!ImageSize.Matches(path, s.WallpaperResolution))
                 {
@@ -143,7 +143,7 @@ public sealed class DevvitService
         return list;
     }
 
-    private static async Task<string?> DownloadAsync(HttpClient http, FeedItem item, string folder)
+    private static async Task<string?> DownloadAsync(HttpClient http, FeedItem item, string folder, AppSettings s)
     {
         try
         {
@@ -161,6 +161,9 @@ public sealed class DevvitService
             if (ext is not (".jpg" or ".jpeg" or ".png")) return null;
 
             var path = Path.Combine(folder, FileNameHelper.FromSlug(item.Slug, item.Url, $"reddit_{item.Id}", ext));
+
+            // 用户在图片库里删过的图不再下载
+            if (s.ShouldSkipDownload(Path.GetFileName(path))) return null;
 
             // 绝不覆盖已存在的文件（可能是用户自己的同名图片）
             if (File.Exists(path)) return null;

@@ -35,7 +35,7 @@ public sealed class BingService
                 if (!string.IsNullOrEmpty(urlBase))
                 {
                     var path = await DownloadAsync(http, $"{host}{urlBase}_UHD.jpg", saveFolder,
-                        BuildFileName(urlBase, date, uhd: true));
+                        BuildFileName(urlBase, date, uhd: true), s);
                     if (path is not null)
                     {
                         if (!ImageSize.Matches(path, s.WallpaperResolution))
@@ -47,7 +47,7 @@ public sealed class BingService
                 {
                     var full = relUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? relUrl : host + relUrl;
                     var path = await DownloadAsync(http, full, saveFolder,
-                        BuildFileName(urlBase, date, uhd: false));
+                        BuildFileName(urlBase, date, uhd: false), s);
                     if (path is not null)
                     {
                         if (!ImageSize.Matches(path, s.WallpaperResolution))
@@ -85,10 +85,13 @@ public sealed class BingService
         return name + (uhd ? "_UHD" : "") + ".jpg";
     }
 
-    private static async Task<string?> DownloadAsync(HttpClient http, string url, string folder, string fileName)
+    private static async Task<string?> DownloadAsync(HttpClient http, string url, string folder, string fileName, AppSettings s)
     {
         try
         {
+            // 用户在图片库里删过的图不再下载
+            if (s.ShouldSkipDownload(fileName)) return null;
+
             Directory.CreateDirectory(folder);
             using var resp = await http.GetAsync(url);
             if (!resp.IsSuccessStatusCode) return null;
