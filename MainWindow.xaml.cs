@@ -126,8 +126,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static string SelectedTag(ComboBox combo) =>
-        (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? "hot";
+    private static string SelectedTag(ComboBox combo, string fallback) =>
+        (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? fallback;
 
     private AppSettings ReadSettingsFromUi()
     {
@@ -151,8 +151,8 @@ public sealed partial class MainWindow : Window
         _settings.SubredditEntries = entries;
         _settings.Subreddits = string.Join(",", entries.Where(e => e.Enabled).Select(e => e.Name));
 
-        _settings.RedditSort = SelectedTag(SortCombo);
-        _settings.RedditTimeRange = SelectedTag(RangeCombo);
+        _settings.RedditSort = SelectedTag(SortCombo, "hot");
+        _settings.RedditTimeRange = SelectedTag(RangeCombo, "week");
         _settings.RedditMinScore = Math.Max(0,
             double.IsNaN(MinScoreBox.Value) ? 100 : (int)MinScoreBox.Value);
         _settings.SkipNsfw = SkipNsfwToggle.IsOn;
@@ -168,8 +168,8 @@ public sealed partial class MainWindow : Window
         _settings.DevvitToken = DevvitTokenBox.Text.Trim();
         _settings.RedditSessionCookie = SessionCookieBox.Text.Trim();
         SessionExpiryText.Text = SessionInfo.Describe(_settings.RedditSessionCookie);
-        _settings.WallpaperStyle = SelectedTag(StyleCombo) is { Length: > 0 } t ? t : "fill";
-        _settings.WallpaperResolution = SelectedTag(ResolutionCombo) is { Length: > 0 } r ? r : "any";
+        _settings.WallpaperStyle = SelectedTag(StyleCombo, "fill") is { Length: > 0 } t ? t : "fill";
+        _settings.WallpaperResolution = SelectedTag(ResolutionCombo, "any") is { Length: > 0 } r ? r : "any";
         _settings.AutoRotateOnLaunch = AutoRotateOnLaunchToggle.IsOn;
         _settings.StartMinimized = StartMinimizedToggle.IsOn;
         return _settings;

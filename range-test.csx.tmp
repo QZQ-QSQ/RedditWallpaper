@@ -1,0 +1,52 @@
+using System.Net;
+using System.Text.RegularExpressions;
+
+var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    "RedditWallpaper", "settings.json");
+using var sd = System.Text.Json.JsonDocument.Parse(File.ReadAllText(settingsPath));
+var cookie = sd.RootElement.GetProperty("RedditSessionCookie").GetString() ?? "";
+
+var handler = new HttpClientHandler
+{
+    AutomaticDecompression = DecompressionMethods.All,
+    UseCookies = true,
+    CookieContainer = new CookieContainer()
+};
+handler.CookieContainer.Add(new Cookie("reddit_session", cookie, "/", ".reddit.com"));
+handler.CookieContainer.Add(new Cookie("over18", "1", "/", ".reddit.com"));
+var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(25) };
+client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+    "windows:RedditWallpaperApp:v1.0 (desktop wallpaper rotator)");
+
+async Task<Dictionary<string, string>> Fetch(string t)
+{
+    // 解析 RSS：entry 的 title + updated 时间
+    var xml = await client.GetStringAsync(
+        $"https://www.reddit.com/r/NSFW_Wallpapers/top/.rss?limit=8&t={t}");
+    var result = new Dictionary<string, string>();
+    foreach (Match m in Regex.Matches(xml, "<entry>(.*?)</entry>", RegexOptions.Singleline))
+    {
+        var e = m.Groups[1].Value;
+        var title = Regex.Match(e, "<title>(.*?)</title>", RegexOptions.Singleline).Groups[1].Value;
+        var upd = Regex.Match(e, "<updated>(.*?)</updated>").Groups[1].Value;
+        var link = Regex.Match(e, "<link href=\"([^\"]+)\"").Groups[1].Value;
+        var id = Regex.Match(link, "/comments/([a-z0-9]+)").Groups[1].Value;
+        result[id] = $"{upd[..10]} {title[..Math.Min(40, title.Length)]}";
+    }
+    return result;
+}
+
+var hour = await Fetch("hour");
+await Task.Delay(3000);
+var all = await Fetch("all");
+
+Console.WriteLine($"t=hour   条数: {hour.Count}");
+foreach (var kv in hour.Take(3)) Console.WriteLine("   " + kv.Value);
+Console.WriteLine($"t=all    条数: {all.Count}");
+foreach (var kv in all.Take(3)) Console.WriteLine("   " + kv.Value);
+
+var hourIds = hour.Keys.ToHashSet();
+var allIds = all.Keys.ToHashSet();
+var overlap = hourIds.Intersect(allIds).Count();
+Console.WriteLine($"两个范围的重叠帖子数: {overlap} / hour={hourIds.Count} all={allIds.Count}");
+Console.WriteLine(overlap == 0 ? "✔ 时间范围生效：hour 与 all 的帖子完全不同" : "⚠ 有重叠，需进一步判断");
