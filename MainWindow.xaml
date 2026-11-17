@@ -8,112 +8,278 @@
     Title="Reddit 壁纸轮换">
 
     <Grid Padding="16" ColumnSpacing="16">
+        <Grid.Resources>
+            <Style x:Key="Card" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="16" />
+            </Style>
+            <Style x:Key="RowDesc" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Opacity" Value="0.7" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="Hint" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Opacity" Value="0.7" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+        </Grid.Resources>
+
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="2*" />
-            <ColumnDefinition Width="1*" />
-            <ColumnDefinition Width="1.3*" />
+            <ColumnDefinition Width="1.8*" />
+            <ColumnDefinition Width="1.5*" />
+            <ColumnDefinition Width="1.2*" />
         </Grid.ColumnDefinitions>
 
-        <!-- ==================== 左侧：常用设置 ==================== -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="12" MinWidth="360">
+        <!-- ==================== 左：设置与操作 ==================== -->
+        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" MinWidth="400">
+            <StackPanel Spacing="16" MinWidth="360">
 
-                <TextBlock Text="桌面壁纸自动轮换" FontSize="24" FontWeight="SemiBold" />
-
-                <TextBlock Text="轮换设置" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <NumberBox x:Name="RotateMinutes" Minimum="1" Maximum="1440"
-                               SpinButtonPlacementMode="Compact" Width="120" Value="30" />
-                    <TextBlock Text="分钟更换一次壁纸" VerticalAlignment="Center" />
-                </StackPanel>
-                <ComboBox x:Name="StyleCombo" Header="壁纸样式" SelectedIndex="0"
-                          SelectionChanged="StyleCombo_SelectionChanged"
-                          HorizontalAlignment="Stretch">
-                    <ComboBoxItem Content="填充" Tag="fill" />
-                    <ComboBoxItem Content="适应" Tag="fit" />
-                    <ComboBoxItem Content="拉伸" Tag="stretch" />
-                    <ComboBoxItem Content="居中" Tag="center" />
-                    <ComboBoxItem Content="平铺" Tag="tile" />
-                </ComboBox>
-                <ComboBox x:Name="ResolutionCombo" Header="最低分辨率" SelectedIndex="0"
-                          HorizontalAlignment="Stretch">
-                    <ComboBoxItem Content="不限" Tag="any" />
-                    <ComboBoxItem Content="最低 1920 × 1080" Tag="1920x1080" />
-                    <ComboBoxItem Content="最低 2560 × 1440" Tag="2560x1440" />
-                    <ComboBoxItem Content="最低 3840 × 2160（4K）" Tag="3840x2160" />
-                    <ComboBoxItem Content="最低 1366 × 768" Tag="1366x768" />
-                    <ComboBoxItem Content="最低 3440 × 1440（带鱼屏）" Tag="3440x1440" />
-                    <ComboBoxItem Content="最低 1080 × 1920（竖屏）" Tag="1080x1920" />
-                </ComboBox>
-                <CheckBox x:Name="AutoRotateOnLaunchCheck" Content="启动程序时自动开始轮换" />
-                <CheckBox x:Name="StartMinimizedCheck" Content="启动时最小化到托盘（不显示主窗口）" />
-                <CheckBox x:Name="AutoStartCheck" Content="开机自动启动（登录后开始轮换）"
-                          Checked="AutoStartCheck_Checked" Unchecked="AutoStartCheck_Checked" />
-
-                <TextBlock Text="图片来源（至少勾选一个）" Style="{StaticResource SubtitleTextBlockStyle}" />
                 <StackPanel Spacing="4">
-                    <CheckBox x:Name="UseRedditCheck" Content="Reddit 社区图片" IsChecked="True" />
-                    <CheckBox x:Name="UseBingCheck" Content="Bing 每日壁纸" />
-                    <CheckBox x:Name="UseLocalCheck" Content="本地文件夹图片" />
-                    <CheckBox x:Name="SourcePriorityCheck"
-                              Content="按固定优先级尝试来源（Reddit → Bing → 本地）" />
+                    <TextBlock Text="壁纸轮换" FontSize="28" FontWeight="SemiBold" />
+                    <TextBlock Text="自动从 Reddit / Bing / 本地文件夹更换桌面壁纸" Style="{StaticResource Hint}" />
                 </StackPanel>
+
+                <TextBlock Text="轮换" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="12">
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="轮换间隔" />
+                                <TextBlock Text="多少分钟更换一次壁纸" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <NumberBox x:Name="RotateMinutes" Grid.Column="1" Width="140" Minimum="1" Maximum="1440"
+                                       Value="30" SpinButtonPlacementMode="Compact" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="壁纸样式" />
+                                <TextBlock Text="填充 / 适应 / 拉伸 / 居中 / 平铺" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ComboBox x:Name="StyleCombo" Grid.Column="1" Width="220" SelectedIndex="0"
+                                      SelectionChanged="StyleCombo_SelectionChanged" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="最低分辨率" />
+                                <TextBlock Text="宽和高都达到该值才采用" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ComboBox x:Name="ResolutionCombo" Grid.Column="1" Width="240" SelectedIndex="0"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="不限" Tag="any" />
+                                <ComboBoxItem Content="最低 1920 × 1080" Tag="1920x1080" />
+                                <ComboBoxItem Content="最低 2560 × 1440" Tag="2560x1440" />
+                                <ComboBoxItem Content="最低 3840 × 2160（4K）" Tag="3840x2160" />
+                                <ComboBoxItem Content="最低 1366 × 768" Tag="1366x768" />
+                                <ComboBoxItem Content="最低 3440 × 1440（带鱼屏）" Tag="3440x1440" />
+                                <ComboBoxItem Content="最低 1080 × 1920（竖屏）" Tag="1080x1920" />
+                            </ComboBox>
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="启动时自动开始轮换" />
+                                <TextBlock Text="程序启动后立即开始倒计时" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="AutoRotateOnLaunchToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="启动时最小化到托盘" />
+                                <TextBlock Text="不显示主窗口，后台轮换" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="StartMinimizedToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="开机自动启动" />
+                                <TextBlock Text="登录后开始轮换" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1"
+                                          Toggled="AutoStartToggle_Toggled"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="图片来源" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="12">
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Reddit 社区图片" VerticalAlignment="Center" />
+                            <ToggleSwitch x:Name="UseRedditToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Bing 每日壁纸" VerticalAlignment="Center" />
+                            <ToggleSwitch x:Name="UseBingToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="本地文件夹图片" VerticalAlignment="Center" />
+                            <ToggleSwitch x:Name="UseLocalToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="按固定优先级尝试来源" />
+                                <TextBlock Text="Reddit → Bing → 本地；关闭则随机" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="SourcePriorityToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
 
                 <TextBlock Text="Reddit 社区" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock Text="一行一个社区，勾选右侧「使用」表示启用；不勾选则跳过"
-                           FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
-                <StackPanel x:Name="SubredditListPanel" Spacing="6" />
-                <Button Content="＋ 添加社区" Click="AddSubreddit_Click" HorizontalAlignment="Left" />
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <ComboBox x:Name="SortCombo" Grid.Column="0" Header="排序方式" SelectedIndex="0"
-                              HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="热门 hot" Tag="hot" />
-                        <ComboBoxItem Content="最新 new" Tag="new" />
-                        <ComboBoxItem Content="最高分 top" Tag="top" />
-                        <ComboBoxItem Content="上升中 rising" Tag="rising" />
-                        <ComboBoxItem Content="最佳 best" Tag="best" />
-                        <ComboBoxItem Content="争议 controversial" Tag="controversial" />
-                        <ComboBoxItem Content="随机 random" Tag="random" />
-                    </ComboBox>
-                    <ComboBox x:Name="RangeCombo" Grid.Column="1" Header="时间范围(top)" SelectedIndex="2"
-                              HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="一小时" Tag="hour" />
-                        <ComboBoxItem Content="今天" Tag="day" />
-                        <ComboBoxItem Content="本周" Tag="week" />
-                        <ComboBoxItem Content="本月" Tag="month" />
-                        <ComboBoxItem Content="今年" Tag="year" />
-                        <ComboBoxItem Content="全部" Tag="all" />
-                    </ComboBox>
-                    <NumberBox x:Name="MinScoreBox" Grid.Column="2" Header="最低得分" Width="150"
-                               Minimum="0" Maximum="1000000" Value="100" SpinButtonPlacementMode="Compact" />
-                </Grid>
-                <CheckBox x:Name="SkipNsfwCheck" Content="跳过 NSFW 内容" IsChecked="True" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="一行一个社区，勾选右侧「使用」表示启用" Style="{StaticResource Hint}" />
+                        <StackPanel x:Name="SubredditListPanel" Spacing="6" />
+                        <Button Content="＋ 添加社区" Click="AddSubreddit_Click" HorizontalAlignment="Left" />
+
+                        <Grid MinHeight="40" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="排序方式" VerticalAlignment="Center" />
+                            <ComboBox x:Name="SortCombo" Grid.Column="1" Width="220" SelectedIndex="0"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="热门 hot" Tag="hot" />
+                                <ComboBoxItem Content="最新 new" Tag="new" />
+                                <ComboBoxItem Content="最高分 top" Tag="top" />
+                                <ComboBoxItem Content="上升中 rising" Tag="rising" />
+                                <ComboBoxItem Content="最佳 best" Tag="best" />
+                                <ComboBoxItem Content="争议 controversial" Tag="controversial" />
+                                <ComboBoxItem Content="随机 random" Tag="random" />
+                            </ComboBox>
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="时间范围" />
+                                <TextBlock Text="top / controversial 生效" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ComboBox x:Name="RangeCombo" Grid.Column="1" Width="220" SelectedIndex="2"
+                                      VerticalAlignment="Center">
+                                <ComboBoxItem Content="一小时" Tag="hour" />
+                                <ComboBoxItem Content="今天" Tag="day" />
+                                <ComboBoxItem Content="本周" Tag="week" />
+                                <ComboBoxItem Content="本月" Tag="month" />
+                                <ComboBoxItem Content="今年" Tag="year" />
+                                <ComboBoxItem Content="全部" Tag="all" />
+                            </ComboBox>
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="最低得分" VerticalAlignment="Center" />
+                            <NumberBox x:Name="MinScoreBox" Grid.Column="1" Width="150" Minimum="0"
+                                       Maximum="1000000" Value="100" SpinButtonPlacementMode="Compact"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="跳过 NSFW 内容" VerticalAlignment="Center" />
+                            <ToggleSwitch x:Name="SkipNsfwToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
                 <TextBlock Text="文件夹" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="SaveFolderBox" Grid.Column="0"
-                             Header="图片保存文件夹（Reddit / Bing 下载到这里）" />
-                    <Button x:Name="PickSaveFolder" Grid.Column="1" Content="浏览…"
-                            VerticalAlignment="Bottom" Click="PickFolder_Click" />
-                </Grid>
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="LocalFolderBox" Grid.Column="0" Header="本地图片文件夹（作为壁纸来源）" />
-                    <Button x:Name="PickLocalFolder" Grid.Column="1" Content="浏览…"
-                            VerticalAlignment="Bottom" Click="PickFolder_Click" />
-                </Grid>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SaveFolderBox" Header="图片保存文件夹"
+                                     PlaceholderText="Reddit / Bing 下载到这里" />
+                            <Button x:Name="PickSaveFolder" Grid.Column="1" Content="浏览…"
+                                    VerticalAlignment="Bottom" Click="PickFolder_Click" />
+                        </Grid>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="LocalFolderBox" Header="本地图片文件夹"
+                                     PlaceholderText="作为壁纸来源" />
+                            <Button x:Name="PickLocalFolder" Grid.Column="1" Content="浏览…"
+                                    VerticalAlignment="Bottom" Click="PickFolder_Click" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
                 <Expander Header="最近使用过的壁纸（点击切回）" HorizontalAlignment="Stretch"
                           HorizontalContentAlignment="Stretch">
@@ -125,106 +291,124 @@
                 </Expander>
 
                 <TextBlock Text="操作" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="RotateNowBtn" Content="立即更换壁纸"
-                            Style="{StaticResource AccentButtonStyle}" Click="RotateNow_Click" />
-                    <Button x:Name="ToggleTimerBtn" Content="开始自动轮换" Click="ToggleTimer_Click" />
-                    <Button x:Name="SaveSettingsBtn" Content="保存设置" Click="SaveSettings_Click" />
-                </StackPanel>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="RotateNowBtn" Content="立即更换壁纸"
+                                Style="{StaticResource AccentButtonStyle}" Click="RotateNow_Click" />
+                        <Button x:Name="ToggleTimerBtn" Content="开始自动轮换" Click="ToggleTimer_Click" />
+                        <Button x:Name="SaveSettingsBtn" Content="保存设置" Click="SaveSettings_Click" />
+                    </StackPanel>
+                </Border>
 
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,4,0,0">
+                <Border Style="{StaticResource Card}">
                     <StackPanel Spacing="4">
-                        <!-- 只读 TextBox：文字可选中复制 -->
-                        <TextBox x:Name="StatusText" IsReadOnly="True" TextWrapping="Wrap"
-                                 AcceptsReturn="True" BorderThickness="0" Background="Transparent"
-                                 IsSpellCheckEnabled="False" Text="就绪。" />
+                        <TextBox x:Name="StatusText" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                                 BorderThickness="0" Background="Transparent" IsSpellCheckEnabled="False"
+                                 Text="就绪。" />
                         <TextBox x:Name="NextChangeText" IsReadOnly="True" BorderThickness="0"
                                  Background="Transparent" IsSpellCheckEnabled="False"
                                  Opacity="0.8" Text="自动轮换：未启动" />
                         <TextBox x:Name="CurrentWallpaperText" IsReadOnly="True" TextWrapping="Wrap"
-                                 BorderThickness="0" Background="Transparent"
-                                 IsSpellCheckEnabled="False" Opacity="0.8" Text="" />
+                                 BorderThickness="0" Background="Transparent" IsSpellCheckEnabled="False"
+                                 Opacity="0.8" Text="" />
                     </StackPanel>
                 </Border>
 
             </StackPanel>
         </ScrollViewer>
 
-        <!-- ==================== 中间：图片浏览 ==================== -->
-        <Border Grid.Column="1" MinWidth="260"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1" CornerRadius="8" Padding="12">
+        <!-- ==================== 中：图片浏览 ==================== -->
+        <Border Grid.Column="1" MinWidth="260" Style="{StaticResource Card}">
             <Grid RowSpacing="8">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="已保存的图片" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <TextBlock Grid.Row="1" x:Name="ThumbFolderText" FontSize="11" Opacity="0.7"
-                           TextWrapping="Wrap" Text="未设置保存文件夹" />
-                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                <TextBlock Grid.Row="0" Text="图片库" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock Grid.Row="1" x:Name="ThumbFolderText" Style="{StaticResource Hint}"
+                           Text="未设置保存文件夹" />
+                <TextBlock Grid.Row="2" x:Name="ThumbCountText" Style="{StaticResource Hint}" Text="" />
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
                     <Button Content="刷新" Click="RefreshThumbs_Click" />
                     <Button Content="打开文件夹" Click="OpenFolder_Click" />
                 </StackPanel>
-                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
                     <GridView x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False" />
                 </ScrollViewer>
             </Grid>
         </Border>
 
-        <!-- ==================== 右侧：账号 / API / 网络 ==================== -->
+        <!-- ==================== 右：账号 / API / 网络 ==================== -->
         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" MinWidth="340">
-            <StackPanel Spacing="8">
+            <StackPanel Spacing="16">
 
                 <TextBlock Text="Reddit 账号 / API" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="8">
-                        <CheckBox x:Name="UseOAuthCheck" Content="使用 OAuth API（推荐）" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="12">
+
+                        <Grid MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="使用 OAuth API" />
+                                <TextBlock Text="官方接口，最稳定" Style="{StaticResource RowDesc}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="UseOAuthToggle" Grid.Column="1"
+                                          VerticalAlignment="Center" Margin="0" />
+                        </Grid>
+
                         <TextBox x:Name="ClientIdBox" Header="Client ID" />
                         <TextBox x:Name="ClientSecretBox" Header="Client Secret（installed app 可留空）" />
                         <Button x:Name="BrowserAuthBtn" HorizontalAlignment="Stretch"
-                                Content="浏览器授权登录（推荐，免密码）" Click="BrowserAuth_Click" />
+                                Style="{StaticResource AccentButtonStyle}"
+                                Content="浏览器授权登录（免密码）" Click="BrowserAuth_Click" />
                         <Button x:Name="ClearTokenBtn" HorizontalAlignment="Stretch"
                                 Content="清除已保存的授权" Click="ClearToken_Click" />
-                        <Button x:Name="ClearSessionBtn" HorizontalAlignment="Stretch"
-                                Content="退出登录（清除会话）" Click="ClearSession_Click" />
-                        <TextBox x:Name="SessionCookieBox" TextWrapping="Wrap"
-                                 Header="reddit_session Cookie（从已登录浏览器的开发者工具复制）"
-                                 PlaceholderText="F12 → 应用/Application → Cookie → https://www.reddit.com → reddit_session" />
-                        <TextBlock x:Name="SessionExpiryText" Text="未登录" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
-                        <Button x:Name="VerifySessionBtn" HorizontalAlignment="Stretch"
-                                Content="验证登录" Click="VerifySession_Click" />
+
                         <TextBlock Text="或使用用户名密码（仅 script 应用，账号需关闭两步验证）"
-                                   FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                                   Style="{StaticResource Hint}" Margin="0,4,0,0" />
                         <TextBox x:Name="UsernameBox" Header="Reddit 用户名" />
                         <PasswordBox x:Name="PasswordBox" Header="Reddit 密码" />
-                        <TextBlock Text="未填 API 时自动使用 RSS 模式（无需账号，图片可正常下载）。"
-                                   FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="登录会话" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="12">
+                        <TextBox x:Name="SessionCookieBox" TextWrapping="Wrap"
+                                 Header="reddit_session Cookie"
+                                 PlaceholderText="从已登录浏览器的开发者工具复制（F12 → 应用 → Cookie）" />
+                        <TextBlock x:Name="SessionExpiryText" Style="{StaticResource Hint}" Text="未登录" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="VerifySessionBtn" Content="验证登录" HorizontalAlignment="Stretch"
+                                    Click="VerifySession_Click" />
+                            <Button x:Name="ClearSessionBtn" Grid.Column="1" Content="退出登录"
+                                    HorizontalAlignment="Stretch" Click="ClearSession_Click" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
                 <TextBlock Text="网络 / 反代 / Devvit" Style="{StaticResource SubtitleTextBlockStyle}" />
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="12">
-                    <StackPanel Spacing="8">
-                        <TextBox x:Name="RedditBaseUrlBox"
-                                 Header="自定义 Reddit 反代（可选）"
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="12">
+                        <TextBox x:Name="RedditBaseUrlBox" Header="自定义 Reddit 反代（可选）"
                                  PlaceholderText="https://reddit.example.com" />
-                        <TextBox x:Name="DevvitFeedUrlBox"
-                                 Header="Devvit 订阅源地址（可选）"
+                        <TextBox x:Name="DevvitFeedUrlBox" Header="Devvit 订阅源地址（可选）"
                                  PlaceholderText="https://wallpaper-feed-xxxx-external.devvit.net/external/feed" />
-                        <TextBox x:Name="DevvitTokenBox"
-                                 Header="Devvit Managed Token（可选）"
+                        <TextBox x:Name="DevvitTokenBox" Header="Devvit Managed Token（可选）"
                                  PlaceholderText="devvit_at_..." />
+                        <TextBlock Text="未填 API 时自动使用 RSS 模式（无需账号，图片可正常下载）。"
+                                   Style="{StaticResource Hint}" />
                     </StackPanel>
                 </Border>
 

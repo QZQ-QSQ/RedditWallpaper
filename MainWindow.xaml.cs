@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
         _tickTimer.Tick += (_, _) => OnTick();
 
         Title = "Reddit 壁纸轮换";
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1320, 820));
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(1440, 880));
 
         // 关闭窗口 → 收进托盘继续轮换
         AppWindow.Closing += OnWindowClosing;
@@ -82,16 +82,16 @@ public sealed partial class MainWindow : Window
     private void LoadSettingsToUi()
     {
         RotateMinutes.Value = _settings.RotateMinutes;
-        UseRedditCheck.IsChecked = _settings.UseReddit;
-        UseBingCheck.IsChecked = _settings.UseBing;
-        UseLocalCheck.IsChecked = _settings.UseLocal;
-        SourcePriorityCheck.IsChecked = _settings.UseSourcePriority;
+        UseRedditToggle.IsOn = _settings.UseReddit;
+        UseBingToggle.IsOn = _settings.UseBing;
+        UseLocalToggle.IsOn = _settings.UseLocal;
+        SourcePriorityToggle.IsOn = _settings.UseSourcePriority;
         LoadSubredditRows();
         MinScoreBox.Value = _settings.RedditMinScore;
-        SkipNsfwCheck.IsChecked = _settings.SkipNsfw;
+        SkipNsfwToggle.IsOn = _settings.SkipNsfw;
         SaveFolderBox.Text = _settings.SaveFolder;
         LocalFolderBox.Text = _settings.LocalFolder;
-        UseOAuthCheck.IsChecked = _settings.UseOAuth;
+        UseOAuthToggle.IsOn = _settings.UseOAuth;
         ClientIdBox.Text = _settings.ClientId;
         ClientSecretBox.Text = _settings.ClientSecret;
         UsernameBox.Text = _settings.RedditUsername;
@@ -101,14 +101,14 @@ public sealed partial class MainWindow : Window
         DevvitTokenBox.Text = _settings.DevvitToken;
         SessionCookieBox.Text = _settings.RedditSessionCookie;
         SessionExpiryText.Text = SessionInfo.Describe(_settings.RedditSessionCookie);
-        AutoStartCheck.IsChecked = StartupHelper.IsEnabled();
+        AutoStartToggle.IsOn = StartupHelper.IsEnabled();
 
         SelectCombo(SortCombo, _settings.RedditSort);
         SelectCombo(RangeCombo, _settings.RedditTimeRange);
         SelectCombo(StyleCombo, _settings.WallpaperStyle);
         SelectCombo(ResolutionCombo, _settings.WallpaperResolution);
-        AutoRotateOnLaunchCheck.IsChecked = _settings.AutoRotateOnLaunch;
-        StartMinimizedCheck.IsChecked = _settings.StartMinimized;
+        AutoRotateOnLaunchToggle.IsOn = _settings.AutoRotateOnLaunch;
+        StartMinimizedToggle.IsOn = _settings.StartMinimized;
     }
 
     private static void SelectCombo(ComboBox combo, string tagValue)
@@ -125,10 +125,10 @@ public sealed partial class MainWindow : Window
     private AppSettings ReadSettingsFromUi()
     {
         _settings.RotateMinutes = Math.Max(1, (int)RotateMinutes.Value);
-        _settings.UseReddit = UseRedditCheck.IsChecked == true;
-        _settings.UseBing = UseBingCheck.IsChecked == true;
-        _settings.UseLocal = UseLocalCheck.IsChecked == true;
-        _settings.UseSourcePriority = SourcePriorityCheck.IsChecked == true;
+        _settings.UseReddit = UseRedditToggle.IsOn;
+        _settings.UseBing = UseBingToggle.IsOn;
+        _settings.UseLocal = UseLocalToggle.IsOn;
+        _settings.UseSourcePriority = SourcePriorityToggle.IsOn;
 
         // 社区列表：一行一个，勾选=启用
         var entries = new List<SubredditEntry>();
@@ -146,10 +146,10 @@ public sealed partial class MainWindow : Window
         _settings.RedditSort = SelectedTag(SortCombo);
         _settings.RedditTimeRange = SelectedTag(RangeCombo);
         _settings.RedditMinScore = Math.Max(0, (int)MinScoreBox.Value);
-        _settings.SkipNsfw = SkipNsfwCheck.IsChecked == true;
+        _settings.SkipNsfw = SkipNsfwToggle.IsOn;
         _settings.SaveFolder = SaveFolderBox.Text.Trim();
         _settings.LocalFolder = LocalFolderBox.Text.Trim();
-        _settings.UseOAuth = UseOAuthCheck.IsChecked == true;
+        _settings.UseOAuth = UseOAuthToggle.IsOn;
         _settings.ClientId = ClientIdBox.Text.Trim();
         _settings.ClientSecret = ClientSecretBox.Text.Trim();
         _settings.RedditUsername = UsernameBox.Text.Trim();
@@ -161,8 +161,8 @@ public sealed partial class MainWindow : Window
         SessionExpiryText.Text = SessionInfo.Describe(_settings.RedditSessionCookie);
         _settings.WallpaperStyle = SelectedTag(StyleCombo) is { Length: > 0 } t ? t : "fill";
         _settings.WallpaperResolution = SelectedTag(ResolutionCombo) is { Length: > 0 } r ? r : "any";
-        _settings.AutoRotateOnLaunch = AutoRotateOnLaunchCheck.IsChecked == true;
-        _settings.StartMinimized = StartMinimizedCheck.IsChecked == true;
+        _settings.AutoRotateOnLaunch = AutoRotateOnLaunchToggle.IsOn;
+        _settings.StartMinimized = StartMinimizedToggle.IsOn;
         return _settings;
     }
 
@@ -265,9 +265,10 @@ public sealed partial class MainWindow : Window
     private void AddSubreddit_Click(object sender, RoutedEventArgs e)
         => AddSubredditRow("", true);
 
-    private void AutoStartCheck_Checked(object sender, RoutedEventArgs e)
+    private void AutoStartToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        StartupHelper.Set(AutoStartCheck.IsChecked == true);
+        if (!_uiReady) return;   // 加载设置时的程序性赋值不写注册表
+        StartupHelper.Set(AutoStartToggle.IsOn);
     }
 
     private void StyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -327,7 +328,7 @@ public sealed partial class MainWindow : Window
             _settings.RedditRefreshToken = token;
             _settings.UseOAuth = true;
             SettingsService.Save(_settings);
-            UseOAuthCheck.IsChecked = true;
+            UseOAuthToggle.IsOn = true;
             SetStatus("授权成功！已保存 refresh token（免密码，支持 2FA）。");
         }
         finally
@@ -445,14 +446,14 @@ public sealed partial class MainWindow : Window
 
         foreach (var path in files)
         {
-            var panel = new StackPanel { Spacing = 4, Width = 132, Padding = new Thickness(2) };
+            var panel = new StackPanel { Spacing = 4, Width = 164, Padding = new Thickness(2) };
 
             var image = new Image
             {
-                Width = 128,
-                Height = 88,
+                Width = 160,
+                Height = 110,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
-                Source = new BitmapImage { DecodePixelWidth = 160, UriSource = new Uri(path) }
+                Source = new BitmapImage { DecodePixelWidth = 200, UriSource = new Uri(path) }
             };
 
             var name = new TextBlock
