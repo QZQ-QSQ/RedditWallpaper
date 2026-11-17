@@ -150,7 +150,7 @@ public sealed class RedditService
         {
             var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, skipIfExists: true);
             if (path is null) continue;
-            if (!ImageSize.Matches(path, s.WallpaperResolution)) { mismatch++; continue; }
+            if (!AcceptResolution(path, s)) { mismatch++; continue; }
             return DownloadResult.Ok(path, note);
         }
 
@@ -168,7 +168,7 @@ public sealed class RedditService
             {
                 var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, skipIfExists: true);
                 if (path is null) continue;
-                if (!ImageSize.Matches(path, s.WallpaperResolution)) { mismatch++; continue; }
+                if (!AcceptResolution(path, s)) { mismatch++; continue; }
                 return DownloadResult.Ok(path, note);
             }
         }
@@ -185,13 +185,21 @@ public sealed class RedditService
         {
             var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
             if (path is null) continue;
-            if (!ImageSize.Matches(path, s.WallpaperResolution)) { mismatch++; continue; }
+            if (!AcceptResolution(path, s)) { mismatch++; continue; }
             return DownloadResult.Ok(path, note);
         }
 
         if (mismatch > 0)
-            return DownloadResult.Fail($"下载了 {mismatch} 张图片，但没有符合分辨率 {s.WallpaperResolution} 的（可在左侧调整「壁纸分辨率」）");
+            return DownloadResult.Fail($"有 {mismatch} 张图片不符合最低分辨率 {s.WallpaperResolution}，已删除未保存（可调低「最低分辨率」）");
         return DownloadResult.Fail($"解析到 {candidates.Count} 个候选但下载全部失败（网络、图片域名被墙或存储权限）");
+    }
+
+    /// <summary>检查分辨率，不符合则删除该文件（未应用的图片不保存），返回 false 表示不采用。</summary>
+    private static bool AcceptResolution(string path, AppSettings s)
+    {
+        if (ImageSize.Matches(path, s.WallpaperResolution)) return true;
+        try { File.Delete(path); } catch { /* 文件被占用等，忽略 */ }
+        return false;
     }
 
     /// <summary>OAuth 优先，其次公开 JSON（自定义反代 &gt; old.reddit.com &gt; www.reddit.com）</summary>

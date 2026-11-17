@@ -55,7 +55,11 @@ public sealed class DevvitService
             {
                 var path = await DownloadAsync(http, item, saveFolder, skipIfExists: true);
                 if (path is null) continue;
-                if (!ImageSize.Matches(path, s.WallpaperResolution)) continue;
+                if (!ImageSize.Matches(path, s.WallpaperResolution))
+                {
+                    try { File.Delete(path); } catch { }
+                    continue;
+                }
                 return RedditService.DownloadResult.Ok(path, "Devvit 源");
             }
 

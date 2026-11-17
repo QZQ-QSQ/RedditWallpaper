@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using RedditWallpaper.Models;
 using RedditWallpaper.Services;
 using Windows.Storage.Pickers;
@@ -50,7 +51,7 @@ public sealed partial class MainWindow : Window
         _tickTimer.Tick += (_, _) => OnTick();
 
         Title = "Reddit 壁纸轮换";
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1220, 820));
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(1320, 820));
 
         // 关闭窗口 → 收进托盘继续轮换
         AppWindow.Closing += OnWindowClosing;
@@ -69,6 +70,11 @@ public sealed partial class MainWindow : Window
 
         // 上次设置要求启动即轮换
         if (_settings.AutoRotateOnLaunch) StartRotation();
+
+        // 启动时最小化到托盘（窗口创建后立即隐藏）
+        if (_settings.StartMinimized) ShowWindow(_hwnd, SW_HIDE);
+
+        RefreshThumbnails();
     }
 
     // ---------------- 设置 <-> UI ----------------
@@ -102,6 +108,7 @@ public sealed partial class MainWindow : Window
         SelectCombo(StyleCombo, _settings.WallpaperStyle);
         SelectCombo(ResolutionCombo, _settings.WallpaperResolution);
         AutoRotateOnLaunchCheck.IsChecked = _settings.AutoRotateOnLaunch;
+        StartMinimizedCheck.IsChecked = _settings.StartMinimized;
     }
 
     private static void SelectCombo(ComboBox combo, string tagValue)
@@ -155,6 +162,7 @@ public sealed partial class MainWindow : Window
         _settings.WallpaperStyle = SelectedTag(StyleCombo) is { Length: > 0 } t ? t : "fill";
         _settings.WallpaperResolution = SelectedTag(ResolutionCombo) is { Length: > 0 } r ? r : "any";
         _settings.AutoRotateOnLaunch = AutoRotateOnLaunchCheck.IsChecked == true;
+        _settings.StartMinimized = StartMinimizedCheck.IsChecked == true;
         return _settings;
     }
 
@@ -185,6 +193,7 @@ public sealed partial class MainWindow : Window
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RedditWallpaper", "settings.json");
         SetStatus($"设置已保存：{path}");
+        RefreshThumbnails();
     }
 
     // ---------------- 社区列表 ----------------
@@ -290,7 +299,7 @@ public sealed partial class MainWindow : Window
         var folder = await picker.PickSingleFolderAsync();
         if (folder is null) return;
 
-        if (sender is Button b && b == PickSaveFolder) SaveFolderBox.Text = folder.Path;
+        if (sender is Button b && b == PickSaveFolder) { SaveFolderBox.Text = folder.Path; RefreshThumbnails(); }
         else if (sender is Button lb && lb == PickLocalFolder) LocalFolderBox.Text = folder.Path;
     }
 
@@ -403,6 +412,94 @@ public sealed partial class MainWindow : Window
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
         }
         catch (Exception ex) { SetStatus("打开文件夹失败：" + ex.Message); }
+    }
+
+    // ---------------- 中间栏：图片浏览 ----------------
+
+    private void RefreshThumbs_Click(object sender, RoutedEventArgs e) => RefreshThumbnails();
+
+    private void RefreshThumbnails()
+    {
+        if (!_uiReady) return;
+
+        var folder = SaveFolderBox.Text.Trim();
+        ThumbFolderText.Text = string.IsNullOrWhiteSpace(folder) ? "未设置保存文件夹" : folder;
+        ThumbGrid.Items.Clear();
+
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
+
+        List<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+                .Where(f => Path.GetExtension(f).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png")
+                .OrderByDescending(f => { try { return File.GetLastWriteTime(f); } catch { return DateTime.MinValue; } })
+                .Take(200)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            SetStatus("读取图片列表失败：" + ex.Message);
+            return;
+        }
+
+        foreach (var path in files)
+        {
+            var panel = new StackPanel { Spacing = 4, Width = 132, Padding = new Thickness(2) };
+
+            var image = new Image
+            {
+                Width = 128,
+                Height = 88,
+                Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
+                Source = new BitmapImage { DecodePixelWidth = 160, UriSource = new Uri(path) }
+            };
+
+            var name = new TextBlock
+            {
+                Text = Path.GetFileName(path),
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                MaxLines = 2,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Opacity = 0.8
+            };
+
+            var delete = new Button
+            {
+                Content = "删除",
+                FontSize = 11,
+                Padding = new Thickness(10, 2, 10, 2),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            var captured = path;
+            delete.Click += (_, _) => _ = DeleteImageAsync(captured);
+
+            panel.Children.Add(image);
+            panel.Children.Add(name);
+            panel.Children.Add(delete);
+            ThumbGrid.Items.Add(panel);
+        }
+    }
+
+    private async Task DeleteImageAsync(string path)
+    {
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+
+            _settings.RecentImages.RemoveAll(p =>
+                string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            SettingsService.Save(_settings);
+            RefreshHistory();
+            RefreshThumbnails();
+            SetStatus("已删除：" + Path.GetFileName(path));
+        }
+        catch (Exception ex)
+        {
+            SetStatus("删除失败：" + Path.GetFileName(path) + " - " + ex.Message);
+        }
+        await Task.CompletedTask;
     }
 
     // ---------------- 托盘 / 窗口 ----------------
@@ -578,6 +675,7 @@ public sealed partial class MainWindow : Window
                     if (s.RecentImages.Count > 50) s.RecentImages.RemoveRange(50, s.RecentImages.Count - 50);
                     SettingsService.Save(s);
                     RefreshHistory();
+                    RefreshThumbnails();
                 }
                 SetStatus((ok
                     ? $"壁纸已更换：{Path.GetFileName(result)}（来源：{CurrentSourceName(usedSource)}）"

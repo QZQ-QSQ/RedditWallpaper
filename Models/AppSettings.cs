@@ -46,6 +46,9 @@ public class AppSettings
     /// <summary>启动程序时自动开始轮换</summary>
     public bool AutoRotateOnLaunch { get; set; } = true;
 
+    /// <summary>启动时最小化到托盘（不显示主窗口）</summary>
+    public bool StartMinimized { get; set; } = false;
+
     /// <summary>按固定优先级尝试来源（Reddit → Bing → 本地）；关闭则随机顺序</summary>
     public bool UseSourcePriority { get; set; } = true;
 

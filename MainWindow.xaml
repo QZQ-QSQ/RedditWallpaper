@@ -10,6 +10,7 @@
     <Grid Padding="16" ColumnSpacing="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="300" />
             <ColumnDefinition Width="400" />
         </Grid.ColumnDefinitions>
 
@@ -43,6 +44,7 @@
                     <ComboBoxItem Content="最低 1080 × 1920（竖屏）" Tag="1080x1920" />
                 </ComboBox>
                 <CheckBox x:Name="AutoRotateOnLaunchCheck" Content="启动程序时自动开始轮换" />
+                <CheckBox x:Name="StartMinimizedCheck" Content="启动时最小化到托盘（不显示主窗口）" />
                 <CheckBox x:Name="AutoStartCheck" Content="开机自动启动（登录后开始轮换）"
                           Checked="AutoStartCheck_Checked" Unchecked="AutoStartCheck_Checked" />
 
@@ -141,8 +143,34 @@
             </StackPanel>
         </ScrollViewer>
 
+        <!-- ==================== 中间：图片浏览 ==================== -->
+        <Border Grid.Column="1"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="12">
+            <Grid RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="已保存的图片" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock Grid.Row="1" x:Name="ThumbFolderText" FontSize="11" Opacity="0.7"
+                           TextWrapping="Wrap" Text="未设置保存文件夹" />
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="刷新" Click="RefreshThumbs_Click" />
+                    <Button Content="打开文件夹" Click="OpenFolder_Click" />
+                </StackPanel>
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                    <GridView x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False" />
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
         <!-- ==================== 右侧：账号 / API / 网络 ==================== -->
-        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="8">
 
                 <TextBlock Text="Reddit 账号 / API" Style="{StaticResource SubtitleTextBlockStyle}" />

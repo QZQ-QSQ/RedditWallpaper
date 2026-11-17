@@ -36,18 +36,26 @@ public sealed class BingService
                 {
                     var path = await DownloadAsync(http, $"{host}{urlBase}_UHD.jpg", saveFolder,
                         BuildFileName(urlBase, date, uhd: true));
-                    if (path is not null && ImageSize.Matches(path, s.WallpaperResolution))
-                        return RedditService.DownloadResult.Ok(path);
+                    if (path is not null)
+                    {
+                        if (!ImageSize.Matches(path, s.WallpaperResolution))
+                        { try { File.Delete(path); } catch { } }
+                        else return RedditService.DownloadResult.Ok(path);
+                    }
                 }
                 if (!string.IsNullOrEmpty(relUrl))
                 {
                     var full = relUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? relUrl : host + relUrl;
                     var path = await DownloadAsync(http, full, saveFolder,
                         BuildFileName(urlBase, date, uhd: false));
-                    if (path is not null && ImageSize.Matches(path, s.WallpaperResolution))
-                        return RedditService.DownloadResult.Ok(path);
+                    if (path is not null)
+                    {
+                        if (!ImageSize.Matches(path, s.WallpaperResolution))
+                        { try { File.Delete(path); } catch { } }
+                        else return RedditService.DownloadResult.Ok(path);
+                    }
                 }
-                lastError = $"{host} 图片下载失败或不符合分辨率 {s.WallpaperResolution}";
+                lastError = $"{host} 图片下载失败或不符合分辨率 {s.WallpaperResolution}（已删除）";
             }
             catch (Exception ex)
             {
