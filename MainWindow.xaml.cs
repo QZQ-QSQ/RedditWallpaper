@@ -527,6 +527,17 @@ public sealed partial class MainWindow : Window
         ThumbCountText.Text = _thumbShown == 0
             ? "文件夹里没有图片"
             : (_thumbTotal > 200 ? $"共 {_thumbTotal} 张（显示最近 200 张）" : $"共 {_thumbTotal} 张");
+        UpdateEmptyLibrary(_thumbShown);
+    }
+
+    /// <summary>图片库空状态：图标 + 说明，避免大片空白。</summary>
+    private void UpdateEmptyLibrary(int count)
+    {
+        EmptyLibrary.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (count > 0) return;
+        EmptyLibraryText.Text = string.IsNullOrWhiteSpace(SaveFolderBox.Text)
+            ? "还没有设置「图片保存文件夹」"
+            : "这个文件夹里还没有图片" + Environment.NewLine + "点「立即更换壁纸」或「打开文件夹」开始";
     }
 
     private void RefreshThumbs_Click(object sender, RoutedEventArgs e) => RefreshThumbnails();
@@ -554,7 +565,11 @@ public sealed partial class MainWindow : Window
         ThumbFolderText.Text = string.IsNullOrWhiteSpace(folder) ? "未设置保存文件夹" : folder;
         ThumbGrid.Items.Clear();
 
-        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+        {
+            UpdateEmptyLibrary(0);
+            return;
+        }
 
         List<string> files;
         var total = 0;
@@ -578,6 +593,9 @@ public sealed partial class MainWindow : Window
             : (total > 200 ? $"共 {total} 张（显示最近 200 张）" : $"共 {total} 张");
         _thumbTotal = total;
         _thumbShown = files.Count;
+
+        // 空状态：没图时给出图标 + 说明，而不是一片空白
+        UpdateEmptyLibrary(files.Count);
 
         foreach (var path in files)
         {
@@ -611,7 +629,7 @@ public sealed partial class MainWindow : Window
             var name = new TextBlock
             {
                 Text = Path.GetFileName(path),
-                FontSize = 11,
+                FontSize = 12,
                 Height = 34,
                 TextWrapping = TextWrapping.Wrap,
                 MaxLines = 2,
@@ -621,14 +639,16 @@ public sealed partial class MainWindow : Window
 
             var fileName = Path.GetFileName(path);
             AutomationProperties.SetName(panel, fileName);
+            ToolTipService.SetToolTip(frame, fileName);
+            ToolTipService.SetToolTip(name, fileName);
 
             var delete = new Button
             {
                 Content = "删除",
                 Tag = fileName,
-                FontSize = 11,
-                Height = 28,
-                Padding = new Thickness(10, 0, 10, 0),
+                FontSize = 12,
+                Height = 32,
+                Padding = new Thickness(8, 0, 8, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             var captured = path;
@@ -638,9 +658,9 @@ public sealed partial class MainWindow : Window
             {
                 Content = "设为壁纸",
                 Tag = fileName,
-                FontSize = 11,
-                Height = 28,
-                Padding = new Thickness(4, 0, 4, 0),
+                FontSize = 12,
+                Height = 32,
+                Padding = new Thickness(8, 0, 8, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             SetCardButtonLabel(delete, "删除");
@@ -821,14 +841,11 @@ public sealed partial class MainWindow : Window
         $"{s.UseReddit}|{s.Subreddits}|{s.RedditSort}|{s.RedditTimeRange}|{s.RedditMinScore}|" +
         $"{s.SkipNsfw}|{s.WallpaperResolution}|{s.UseOAuth}|{s.RedditBaseUrl}";
 
-    private static void SetPreviewThumb(Image image, string? path)
+    private static void SetPreviewThumb(Image image, FontIcon placeholder, string? path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-        {
-            image.Source = null;
-            return;
-        }
-        image.Source = new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(path) };
+        var has = !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        image.Source = has ? new BitmapImage { DecodePixelWidth = 240, UriSource = new Uri(path!) } : null;
+        placeholder.Visibility = has ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>按当前舍弃状态刷新按钮文字（Text 同时作为无障碍名称）。</summary>
@@ -880,7 +897,7 @@ public sealed partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(prev) || !File.Exists(prev))
                 prev = s.RecentImages.FirstOrDefault(File.Exists);
             _prevPreviewPath = prev;
-            SetPreviewThumb(PrevThumb, prev);
+            SetPreviewThumb(PrevThumb, PrevThumbIcon, prev);
             PrevTitle.Text = string.IsNullOrWhiteSpace(prev) ? "还没有换过壁纸" : Path.GetFileName(prev);
             UpdateDiscardButton(DiscardPrevBtn, string.IsNullOrWhiteSpace(prev) ? null : Path.GetFileName(prev));
 
@@ -892,7 +909,7 @@ public sealed partial class MainWindow : Window
                 _queue.Clear();
                 _queueSignature = null;
                 _nextName = null;
-                SetPreviewThumb(NextThumb, null);
+                SetPreviewThumb(NextThumb, NextThumbIcon, null);
                 NextTitle.Text = "未启用 Reddit 来源";
                 UpdateDiscardButton(DiscardNextBtn, null);
                 return;
@@ -908,6 +925,8 @@ public sealed partial class MainWindow : Window
             if (_queue.Count == 0)
             {
                 NextTitle.Text = "正在获取候选…";
+            NextLoadingRing.IsActive = true;
+            NextThumbIcon.Visibility = Visibility.Collapsed;
                 var batch = await _reddit.BuildCandidatesAsync(s);
                 var redditFolder = string.IsNullOrWhiteSpace(s.SaveFolder) ? "" : SourceFolder(s.SaveFolder, "reddit");
                 foreach (var c in batch.Candidates ?? new List<RedditService.RedditImage>())
@@ -923,7 +942,7 @@ public sealed partial class MainWindow : Window
             if (_queue.Count == 0)
             {
                 _nextName = null;
-                SetPreviewThumb(NextThumb, null);
+                SetPreviewThumb(NextThumb, NextThumbIcon, null);
                 NextTitle.Text = "没有新的候选（都已下载过或已舍弃）";
                 UpdateDiscardButton(DiscardNextBtn, null);
                 return;
@@ -939,6 +958,8 @@ public sealed partial class MainWindow : Window
             if (cached is null)
             {
                 NextTitle.Text = _nextName + "（正在预取…）";
+                NextLoadingRing.IsActive = true;
+                NextThumbIcon.Visibility = Visibility.Collapsed;
                 cached = await _reddit.PrefetchAsync(s, next, PreviewCache.CacheDir);
             }
 
@@ -948,20 +969,22 @@ public sealed partial class MainWindow : Window
                 _nextName = Path.GetFileName(cached);
                 NextTitle.Text = _nextName;
                 UpdateDiscardButton(DiscardNextBtn, _nextName);
-                SetPreviewThumb(NextThumb, cached);
+                SetPreviewThumb(NextThumb, NextThumbIcon, cached);
             }
             else
             {
-                SetPreviewThumb(NextThumb, null);
+                SetPreviewThumb(NextThumb, NextThumbIcon, null);
                 NextTitle.Text = _nextName + "（预取失败，轮换时会再试）";
             }
         }
         catch (Exception ex)
         {
+            SetPreviewThumb(NextThumb, NextThumbIcon, null);
             NextTitle.Text = "预览获取失败：" + ex.Message;
         }
         finally
         {
+            NextLoadingRing.IsActive = false;
             _previewBusy = false;
         }
     }

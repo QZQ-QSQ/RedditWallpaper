@@ -8,20 +8,21 @@
     mc:Ignorable="d"
     Title="Reddit 壁纸轮换">
 
-    <Grid Padding="10" ColumnSpacing="6" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Padding="8" ColumnSpacing="8" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.Resources>
-        <x:Double x:Key="SettingsCardSpacing">3</x:Double>
+        <x:Double x:Key="SettingsCardSpacing">4</x:Double>
 
-        <!-- 紧凑排版：覆盖 toolkit 的默认内边距/最小高度，减少留白 -->
-        <Thickness x:Key="SettingsCardPadding">12,9,12,9</Thickness>
-        <x:Double x:Key="SettingsCardMinHeight">52</x:Double>
+        <!-- 紧凑排版：覆盖 toolkit 的默认内边距/最小高度（全部落在 4px 栅格上） -->
+        <Thickness x:Key="SettingsCardPadding">12,8,12,8</Thickness>
+        <x:Double x:Key="SettingsCardMinHeight">48</x:Double>
         <Thickness x:Key="SettingsCardHeaderIconMargin">2,0,12,0</Thickness>
+        <x:Double x:Key="SettingsCardVerticalHeaderContentSpacing">4</x:Double>
 
         <Style x:Key="SettingsSectionHeaderTextBlockStyle"
                BasedOn="{StaticResource BodyStrongTextBlockStyle}"
                TargetType="TextBlock">
             <Style.Setters>
-                <Setter Property="Margin" Value="1,14,0,4" />
+                <Setter Property="Margin" Value="1,12,0,4" />
             </Style.Setters>
         </Style>
 
@@ -30,7 +31,7 @@
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="10" />
+            <Setter Property="Padding" Value="8" />
         </Style>
 
         <Style x:Key="PreviewCard" TargetType="Border">
@@ -38,7 +39,16 @@
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="6" />
+            <Setter Property="Padding" Value="8" />
+        </Style>
+
+        <!-- 卡片内小按钮：32px 触控目标 + Caption 字号（官方最小尺寸） -->
+        <Style x:Key="CardActionButton" TargetType="Button">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
         </Style>
 
         <Style x:Key="Hint" TargetType="TextBlock">
@@ -140,32 +150,43 @@
                             </Grid.ColumnDefinitions>
 
                             <Border Grid.Column="0" Style="{StaticResource PreviewCard}">
-                                <StackPanel Spacing="6">
+                                <StackPanel Spacing="4">
                                     <TextBlock Text="上一张" Style="{StaticResource Hint}" />
                                     <Border Height="92" CornerRadius="4"
                                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                                        <Image x:Name="PrevThumb" Stretch="UniformToFill" />
+                                        <Grid>
+                                            <Image x:Name="PrevThumb" Stretch="UniformToFill" />
+                                            <FontIcon x:Name="PrevThumbIcon" Glyph="&#xE8B9;" FontSize="24"
+                                                      Opacity="0.4" HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center" />
+                                        </Grid>
                                     </Border>
                                     <TextBlock x:Name="PrevTitle" Style="{StaticResource Hint}" Height="30"
                                                MaxLines="2" TextTrimming="CharacterEllipsis" Text="还没有换过壁纸" />
-                                    <Button x:Name="DiscardPrevBtn" Content="舍弃" Height="28" FontSize="11"
-                                            HorizontalAlignment="Stretch" IsEnabled="False"
-                                            Click="DiscardPrev_Click" />
+                                    <Button x:Name="DiscardPrevBtn" Content="舍弃" IsEnabled="False"
+                                            Style="{StaticResource CardActionButton}" Click="DiscardPrev_Click" />
                                 </StackPanel>
                             </Border>
 
                             <Border Grid.Column="1" Style="{StaticResource PreviewCard}">
-                                <StackPanel Spacing="6">
+                                <StackPanel Spacing="4">
                                     <TextBlock Text="下一张" Style="{StaticResource Hint}" />
                                     <Border Height="92" CornerRadius="4"
                                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                                        <Image x:Name="NextThumb" Stretch="UniformToFill" />
+                                        <Grid>
+                                            <Image x:Name="NextThumb" Stretch="UniformToFill" />
+                                            <FontIcon x:Name="NextThumbIcon" Glyph="&#xE8B9;" FontSize="24"
+                                                      Opacity="0.4" HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center" />
+                                            <ProgressRing x:Name="NextLoadingRing" Width="24" Height="24"
+                                                          IsActive="False" HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                        </Grid>
                                     </Border>
                                     <TextBlock x:Name="NextTitle" Style="{StaticResource Hint}" Height="30"
                                                MaxLines="2" TextTrimming="CharacterEllipsis" Text="尚未获取队列" />
-                                    <Button x:Name="DiscardNextBtn" Content="舍弃" Height="28" FontSize="11"
-                                            HorizontalAlignment="Stretch" IsEnabled="False"
-                                            Click="DiscardNext_Click" />
+                                    <Button x:Name="DiscardNextBtn" Content="舍弃" IsEnabled="False"
+                                            Style="{StaticResource CardActionButton}" Click="DiscardNext_Click" />
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -344,15 +365,25 @@
                     <TextBlock x:Name="ThumbCountText" Style="{StaticResource Hint}" Text="" />
                 </StackPanel>
 
-                <GridView Grid.Row="2" x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False"
-                          ItemContainerStyle="{StaticResource ThumbItemStyle}"
-                          SizeChanged="ThumbGrid_SizeChanged">
-                    <GridView.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <ItemsWrapGrid Orientation="Horizontal" ItemWidth="180" ItemHeight="212" />
-                        </ItemsPanelTemplate>
-                    </GridView.ItemsPanel>
-                </GridView>
+                <Grid Grid.Row="2">
+                    <GridView x:Name="ThumbGrid" SelectionMode="None" IsItemClickEnabled="False"
+                              ItemContainerStyle="{StaticResource ThumbItemStyle}"
+                              SizeChanged="ThumbGrid_SizeChanged">
+                        <GridView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsWrapGrid Orientation="Horizontal" ItemWidth="180" ItemHeight="212" />
+                            </ItemsPanelTemplate>
+                        </GridView.ItemsPanel>
+                    </GridView>
+
+                    <StackPanel x:Name="EmptyLibrary" Visibility="Collapsed" Spacing="8"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE8B9;" FontSize="36" Opacity="0.35"
+                                  HorizontalAlignment="Center" />
+                        <TextBlock x:Name="EmptyLibraryText" Style="{StaticResource Hint}"
+                                   TextAlignment="Center" Text="文件夹里还没有图片" />
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Grid>
