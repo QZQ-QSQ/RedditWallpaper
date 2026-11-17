@@ -6,17 +6,18 @@
 
 ## 编译
 
-需要安装了 .NET 桌面开发组件的 Visual Studio / Build Tools（项目已用 Build Tools 的 MSBuild 编译过）。
+需要 **.NET 10 SDK**（项目使用 .NET 10 + Windows App SDK 2.6.5；不再依赖 Visual Studio）。
 
 命令行方式（在本目录）：
 
 ```bat
-D:\VS\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe RedditWallpaper.csproj ^
-  /restore /p:Configuration=Release /p:Platform=x64 /m /v:m /nologo
+dotnet build .\RedditWallpaper.csproj -c Release -p:Platform=x64 -v:minimal --nologo
 ```
 
-编译产物在 `bin\x64\Release\net8.0-windows10.0.19041.0\` 下，`RedditWallpaper.exe` 为独立 exe
+编译产物在 `bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\` 下，`RedditWallpaper.exe` 为独立 exe
 （SelfContained + WindowsAppSDKSelfContained，目标机器**不需要**安装 .NET 运行时和 Windows App SDK）。
+项目只引用 `Microsoft.WindowsAppSDK.WinUI` 组件包，不带 AI/ML/ONNX 负载；如无需要，不要换成完整
+`Microsoft.WindowsAppSDK` 元包（会多约 66 MB）。
 
 要出 32 位版：把 `/p:Platform=x64` 换成 `/p:Platform=x86`。
 
@@ -30,6 +31,8 @@ D:\VS\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe RedditWallpaper.csproj ^
 - **壁纸样式**：填充 / 适应 / 拉伸 / 居中 / 平铺。
 - **启动即轮换**：可设置启动程序时自动开始轮换。
 - **托盘常驻**：关闭窗口收进系统托盘，继续后台轮换；托盘右键可显示窗口/立即更换/退出。
+- **可拖拽分隔条**：设置区与图片库之间的边界可用鼠标拖拽调整宽度。
+- **开机自启路径自愈**：程序移动位置后，启动时自动修正自启注册表里的 exe 路径。
 - **最近使用记录**：界面列出最近 20 张壁纸，点击即可切回。
 - **来源优先级**：默认 Reddit → Bing → 本地依次尝试，也可切换为随机。
 - **避免重复**：Reddit 已下载过的帖子自动跳过换下一张；本地文件夹不连续使用同一张图。

@@ -76,6 +76,7 @@ public sealed partial class MainWindow : Window
         if (_settings.AutoRotateOnLaunch) StartRotation();
 
         StartHidden = _settings.StartMinimized;
+        StartupHelper.EnsureCurrentPath();
 
         RefreshThumbnails();
     }
@@ -463,10 +464,11 @@ public sealed partial class MainWindow : Window
     private void Splitter_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         _splitterDragging = true;
-        var root = (UIElement)Content!;
+        var root = (FrameworkElement)Content!;
         _dragStartRootX = e.GetCurrentPoint(root).Position.X;
         _leftStartWidth = LeftColumn.Width.IsAbsolute ? LeftColumn.Width.Value : LeftColumn.ActualWidth;
         ((UIElement)sender).CapturePointer(e.Pointer);
+        SetStatus($"分隔条：已按下（起点 {_dragStartRootX:F0}，左栏 {_leftStartWidth:F0}px）");
         e.Handled = true;
     }
 
@@ -481,6 +483,7 @@ public sealed partial class MainWindow : Window
             var total = root.ActualWidth - splitterWidth;
             var newLeft = Math.Clamp(_leftStartWidth + dx, 380, Math.Max(380, total - 480));
             LeftColumn.Width = new GridLength(newLeft, GridUnitType.Pixel);
+            SetStatus($"分隔条拖动中：Δ={dx:F0} → 左栏 {newLeft:F0}px");
             e.Handled = true;
         }
         catch { /* 拖拽中的指针事件异常忽略 */ }
@@ -491,6 +494,7 @@ public sealed partial class MainWindow : Window
         if (!_splitterDragging) return;
         _splitterDragging = false;
         ((UIElement)sender).ReleasePointerCapture(e.Pointer);
+        SetStatus($"分隔条释放：左栏 {LeftColumn.Width.Value:F0}px");
         e.Handled = true;
     }
 

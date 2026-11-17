@@ -26,6 +26,20 @@ public static class StartupHelper
         }
     }
 
+    /// <summary>已启用自启但注册表里的 exe 路径不是当前程序时，静默修正（程序迁移后自愈）。</summary>
+    public static void EnsureCurrentPath()
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath)) return;
+
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        var stored = key?.GetValue(AppName) as string;
+        if (stored is null) return; // 未启用自启，不动
+
+        if (!stored.Contains(exePath, StringComparison.OrdinalIgnoreCase))
+            Set(true);
+    }
+
     public static bool IsEnabled()
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
