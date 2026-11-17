@@ -572,20 +572,37 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            if (File.Exists(path)) File.Delete(path);
+            // 先让用户确认，再移到回收站（可恢复）
+            var dialog = new ContentDialog
+            {
+                Title = "移到回收站？",
+                Content = "将把这张图片移到回收站：\n" + Path.GetFileName(path),
+                PrimaryButtonText = "移到回收站",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            var moved = SafeFile.MoveToRecycleBin(path);
+            if (!moved)
+            {
+                SetStatus("未移动（文件可能被占用）：" + Path.GetFileName(path));
+                return;
+            }
 
             _settings.RecentImages.RemoveAll(p =>
                 string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
             SettingsService.Save(_settings);
             RefreshHistory();
             RefreshThumbnails();
-            SetStatus("已删除：" + Path.GetFileName(path));
+            SetStatus("已移到回收站：" + Path.GetFileName(path));
         }
         catch (Exception ex)
         {
             SetStatus("删除失败：" + Path.GetFileName(path) + " - " + ex.Message);
         }
-        await Task.CompletedTask;
     }
 
     // ---------------- 托盘 / 窗口 ----------------
@@ -659,6 +676,15 @@ public sealed partial class MainWindow : Window
             : "正在更换…";
     }
 
+    /// <summary>来源子目录：保存目录本身已叫 reddit/bing 时不再套一层，避免 reddit\reddit。</summary>
+    private static string SourceFolder(string saveFolder, string kind)
+    {
+        var full = saveFolder.TrimEnd('\\', '/');
+        var leaf = Path.GetFileName(full);
+        if (string.Equals(leaf, kind, StringComparison.OrdinalIgnoreCase)) return full;
+        return Path.Combine(full, kind);
+    }
+
     /// <summary>从所有启用来源轮换一次壁纸；reschedule=true 时按间隔安排下一次。</summary>
     private async Task RotateOnceAsync(bool reschedule = false)
     {
@@ -711,14 +737,14 @@ public sealed partial class MainWindow : Window
                             // 配了 Devvit 订阅源就先走它（Reddit 侧代取数据，有得分/NSFW 过滤）
                             if (!string.IsNullOrWhiteSpace(s.DevvitFeedUrl))
                             {
-                                var d = await _devvit.TryDownloadWallpaperAsync(s, Path.Combine(s.SaveFolder, "reddit"));
+                                var d = await _devvit.TryDownloadWallpaperAsync(s, SourceFolder(s.SaveFolder, "reddit"));
                                 result = d.Path;
                                 if (result is null) errors.Add("Devvit: " + d.Error);
                                 else note = d.Note;
                             }
                             if (result is null)
                             {
-                                var r = await _reddit.TryDownloadWallpaperAsync(s, Path.Combine(s.SaveFolder, "reddit"));
+                                var r = await _reddit.TryDownloadWallpaperAsync(s, SourceFolder(s.SaveFolder, "reddit"));
                                 result = r.Path;
                                 if (result is null) errors.Add("Reddit: " + r.Error);
                                 else note = r.Note;
@@ -731,7 +757,7 @@ public sealed partial class MainWindow : Window
                                 break;
                             }
                             usedSource = source;
-                            var b = await _bing.TryDownloadWallpaperAsync(s, Path.Combine(s.SaveFolder, "bing"));
+                            var b = await _bing.TryDownloadWallpaperAsync(s, SourceFolder(s.SaveFolder, "bing"));
                             result = b.Path;
                             if (result is null) errors.Add("Bing: " + b.Error);
                             break;

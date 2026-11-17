@@ -163,7 +163,7 @@ public sealed class RedditService
         // 第一轮：跳过已经下载过的帖子，选没见过的新图
         foreach (var img in candidates)
         {
-            var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, skipIfExists: true);
+            var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
             if (path is null) continue;
             if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
             return DownloadResult.Ok(path, note);
@@ -182,7 +182,7 @@ public sealed class RedditService
             }
             foreach (var img in candidates)
             {
-                var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl, skipIfExists: true);
+                var path = await DownloadImageAsync(http, img.Url, saveFolder, img.Id, img.Slug, s.RedditBaseUrl);
                 if (path is null) continue;
                 if (!AcceptResolution(path, s)) { _resolutionSkip.Add(img.Id); mismatch++; continue; }
                 return DownloadResult.Ok(path, note);
@@ -210,11 +210,11 @@ public sealed class RedditService
         return DownloadResult.Fail($"解析到 {candidates.Count} 个候选但下载全部失败（网络、图片域名被墙或存储权限）");
     }
 
-    /// <summary>检查分辨率，不符合则删除该文件（未应用的图片不保存），返回 false 表示不采用。</summary>
+    /// <summary>检查分辨率；不符合时只清理"本次运行由程序自己下载"的文件（进回收站），其余不动。</summary>
     private static bool AcceptResolution(string path, AppSettings s)
     {
         if (ImageSize.Matches(path, s.WallpaperResolution)) return true;
-        try { File.Delete(path); } catch { /* 文件被占用等，忽略 */ }
+        SafeFile.DeleteOwned(path); // 非本次下载的文件绝不删除
         return false;
     }
 
@@ -625,7 +625,7 @@ public sealed class RedditService
         url.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<string?> DownloadImageAsync(HttpClient http, string url, string folder,
-        string id, string slug, string? baseUrl = null, bool skipIfExists = false)
+        string id, string slug, string? baseUrl = null)
     {
         try
         {
@@ -656,12 +656,21 @@ public sealed class RedditService
             if (ext is not (".jpg" or ".jpeg" or ".png")) return null;
 
             var path = Path.Combine(folder, FileNameHelper.FromSlug(slug, url, $"reddit_{id}", ext));
-            if (skipIfExists && File.Exists(path)) return null; // 已经用过这张
+
+            // 绝不覆盖已存在的文件（可能是用户自己的同名图片）
+            if (File.Exists(path)) return null;
+
+            // 路径逃逸防护：只允许写到目标文件夹内
+            var fullPath = Path.GetFullPath(path);
+            var folderFull = Path.GetFullPath(folder);
+            if (!fullPath.StartsWith(folderFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return null;
 
             var bytes = await resp.Content.ReadAsByteArrayAsync();
             if (bytes.Length < 10_000) return null; // 太小的多半是缩略图/占位图
 
             await File.WriteAllBytesAsync(path, bytes);
+            SafeFile.MarkWritten(path);
             return path;
         }
         catch

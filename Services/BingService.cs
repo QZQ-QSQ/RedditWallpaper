@@ -39,7 +39,7 @@ public sealed class BingService
                     if (path is not null)
                     {
                         if (!ImageSize.Matches(path, s.WallpaperResolution))
-                        { try { File.Delete(path); } catch { } }
+                        { SafeFile.DeleteOwned(path); }
                         else return RedditService.DownloadResult.Ok(path);
                     }
                 }
@@ -51,7 +51,7 @@ public sealed class BingService
                     if (path is not null)
                     {
                         if (!ImageSize.Matches(path, s.WallpaperResolution))
-                        { try { File.Delete(path); } catch { } }
+                        { SafeFile.DeleteOwned(path); }
                         else return RedditService.DownloadResult.Ok(path);
                     }
                 }
@@ -99,7 +99,10 @@ public sealed class BingService
             if (bytes.Length < 50_000) return null;
 
             var path = Path.Combine(folder, fileName);
+            if (File.Exists(path)) return null; // 不覆盖已有文件
+
             await File.WriteAllBytesAsync(path, bytes);
+            SafeFile.MarkWritten(path);
             return path;
         }
         catch

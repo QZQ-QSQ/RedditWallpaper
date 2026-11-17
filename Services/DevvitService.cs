@@ -66,11 +66,11 @@ public sealed class DevvitService
 
             foreach (var item in items)
             {
-                var path = await DownloadAsync(http, item, saveFolder, skipIfExists: true);
+                var path = await DownloadAsync(http, item, saveFolder);
                 if (path is null) continue;
                 if (!ImageSize.Matches(path, s.WallpaperResolution))
                 {
-                    try { File.Delete(path); } catch { }
+                    SafeFile.DeleteOwned(path);
                     _resolutionSkip.Add(item.Id);
                     continue;
                 }
@@ -143,7 +143,7 @@ public sealed class DevvitService
         return list;
     }
 
-    private static async Task<string?> DownloadAsync(HttpClient http, FeedItem item, string folder, bool skipIfExists)
+    private static async Task<string?> DownloadAsync(HttpClient http, FeedItem item, string folder)
     {
         try
         {
@@ -161,12 +161,20 @@ public sealed class DevvitService
             if (ext is not (".jpg" or ".jpeg" or ".png")) return null;
 
             var path = Path.Combine(folder, FileNameHelper.FromSlug(item.Slug, item.Url, $"reddit_{item.Id}", ext));
-            if (skipIfExists && File.Exists(path)) return null;
+
+            // 绝不覆盖已存在的文件（可能是用户自己的同名图片）
+            if (File.Exists(path)) return null;
+
+            var fullPath = Path.GetFullPath(path);
+            var folderFull = Path.GetFullPath(folder);
+            if (!fullPath.StartsWith(folderFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return null;
 
             var bytes = await resp.Content.ReadAsByteArrayAsync();
             if (bytes.Length < 10_000) return null;
 
             await File.WriteAllBytesAsync(path, bytes);
+            SafeFile.MarkWritten(path);
             return path;
         }
         catch
