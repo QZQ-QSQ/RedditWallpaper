@@ -5,3 +5,5 @@ obj/
 .cache/
 devvit-feed/node_modules/
 devvit-feed/dist/
+.opencode/
+ui-test-artifacts/
