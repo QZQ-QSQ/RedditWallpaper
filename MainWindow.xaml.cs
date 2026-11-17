@@ -585,11 +585,66 @@ public sealed partial class MainWindow : Window
             var captured = path;
             delete.Click += (_, _) => _ = DeleteImageAsync(captured);
 
+            var setBtn = new Button
+            {
+                Content = "设为壁纸",
+                FontSize = 11,
+                Height = 28,
+                Padding = new Thickness(4, 0, 4, 0),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            setBtn.Click += (_, _) => _ = SetWallpaperFromLibraryAsync(captured);
+
+            var buttons = new Grid { ColumnSpacing = 4, Height = 28 };
+            buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(setBtn, 0);
+            Grid.SetColumn(delete, 1);
+            buttons.Children.Add(setBtn);
+            buttons.Children.Add(delete);
+
             panel.Children.Add(frame);
             panel.Children.Add(name);
-            panel.Children.Add(delete);
+            panel.Children.Add(buttons);
             ThumbGrid.Items.Add(panel);
         }
+    }
+
+    /// <summary>把图片库里的某张图设为当前壁纸（并记入最近使用）。</summary>
+    private async Task SetWallpaperFromLibraryAsync(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                SetStatus("文件已不存在：" + Path.GetFileName(path));
+                RefreshThumbnails();
+                return;
+            }
+
+            var s = ReadSettingsFromUi();
+            var ok = WallpaperService.SetWallpaper(path, s.WallpaperStyle);
+            if (!ok)
+            {
+                SetStatus("设置壁纸失败：" + path);
+                return;
+            }
+
+            _settings.RecentImages.RemoveAll(p =>
+                string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            _settings.RecentImages.Insert(0, path);
+            if (_settings.RecentImages.Count > 50) _settings.RecentImages.RemoveRange(50, _settings.RecentImages.Count - 50);
+            SettingsService.Save(_settings);
+
+            CurrentWallpaperText.Text = path;
+            RefreshHistory();
+            SetStatus("壁纸已设置：" + Path.GetFileName(path));
+        }
+        catch (Exception ex)
+        {
+            SetStatus("设置壁纸失败：" + ex.Message);
+        }
+        await Task.CompletedTask;
     }
 
     private async Task DeleteImageAsync(string path)
