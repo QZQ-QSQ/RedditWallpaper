@@ -237,6 +237,10 @@
                                 Click="PickFolder_Click" />
                     </Grid>
                 </controls:SettingsCard>
+                <controls:SettingsCard Header="图片库上限" Description="超过上限后清理最旧的图">
+                    <NumberBox x:Name="LibraryLimitBox" Width="180" Minimum="0" Maximum="10000"
+                               Value="100" SpinButtonPlacementMode="Inline" VerticalAlignment="Center" />
+                </controls:SettingsCard>
                 <controls:SettingsCard Header="本地图片文件夹" Description="作为壁纸来源">
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>

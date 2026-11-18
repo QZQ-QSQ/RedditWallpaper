@@ -138,6 +138,9 @@ public class AppSettings
     // ---------- 文件夹 ----------
     /// <summary>图片保存文件夹（Reddit/Bing 下载的图都存这里）</summary>
     public string SaveFolder { get; set; } = "";
+
+    /// <summary>图片库总张数上限（含手动放入的图片）：超过时把最旧的移到回收站。0 = 不限制</summary>
+    public int MaxLibraryImages { get; set; } = 100;
     /// <summary>本地图片来源文件夹</summary>
     public string LocalFolder { get; set; } = "";
 }

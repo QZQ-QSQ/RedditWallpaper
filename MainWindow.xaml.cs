@@ -147,6 +147,13 @@ public sealed partial class MainWindow : Window
         StartupHelper.EnsureCurrentPath();
 
         RefreshThumbnails();
+
+        // 启动时不自动删图：先提示，让用户确认/调整上限后再点「保存设置」
+        if (_settings.MaxLibraryImages > 0 && _thumbTotal > _settings.MaxLibraryImages)
+        {
+            SetStatus($"图片库 {_thumbTotal} 张，超过上限 {_settings.MaxLibraryImages} 张；" +
+                      $"点「保存设置」会清理最旧的 {_thumbTotal - _settings.MaxLibraryImages} 张（回收站可恢复）。");
+        }
     }
 
     /// <summary>启动即隐藏主窗口（在 Activate 之后调用）</summary>
@@ -165,6 +172,7 @@ public sealed partial class MainWindow : Window
         MinScoreBox.Value = _settings.RedditMinScore;
         SkipNsfwToggle.IsOn = _settings.SkipNsfw;
         SaveFolderBox.Text = _settings.SaveFolder;
+        LibraryLimitBox.Value = _settings.MaxLibraryImages;
         LocalFolderBox.Text = _settings.LocalFolder;
         UseOAuthToggle.IsOn = _settings.UseOAuth;
         ClientIdBox.Text = _settings.ClientId;
@@ -225,6 +233,9 @@ public sealed partial class MainWindow : Window
             double.IsNaN(MinScoreBox.Value) ? 100 : (int)MinScoreBox.Value);
         _settings.SkipNsfw = SkipNsfwToggle.IsOn;
         _settings.SaveFolder = SaveFolderBox.Text.Trim();
+        _settings.MaxLibraryImages = double.IsNaN(LibraryLimitBox.Value)
+            ? 100
+            : (int)Math.Clamp(LibraryLimitBox.Value, 0, 10000);
         _settings.LocalFolder = LocalFolderBox.Text.Trim();
         _settings.UseOAuth = UseOAuthToggle.IsOn;
         _settings.ClientId = ClientIdBox.Text.Trim();
@@ -266,10 +277,14 @@ public sealed partial class MainWindow : Window
         var s = ReadSettingsFromUi();
         SettingsService.Save(s);
 
+        // 上限可能刚被改小：保存时立即按总张数清理，最旧的进回收站
+        var pruned = EnforceLibraryLimit(s, showStatus: false);
+
         var path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RedditWallpaper", "settings.json");
-        SetStatus($"设置已保存：{path}");
+        SetStatus($"设置已保存：{path}" +
+                  (pruned > 0 ? $"；图片库超过上限 {s.MaxLibraryImages} 张，已清理最旧的 {pruned} 张（回收站可恢复）" : ""));
         RefreshThumbnails();
         _ = RefreshPreviewAsync();
     }
@@ -606,6 +621,105 @@ public sealed partial class MainWindow : Window
     }
 
     private void ThumbGrid_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyThumbLayout();
+
+    /// <summary>
+    /// 图片库总张数硬上限：超过时把最旧的图片移到回收站（当前壁纸除外）。
+    /// 返回实际移走的张数；0 表示未做任何删除。
+    /// </summary>
+    private int EnforceLibraryLimit(AppSettings s, bool showStatus)
+    {
+        if (!_uiReady || s.MaxLibraryImages <= 0) return 0;
+
+        var folder = s.SaveFolder.Trim();
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return 0;
+
+        List<string> images;
+        try
+        {
+            images = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+                .Where(IsImageFile)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            if (showStatus) SetStatus("统计图片库失败：" + ex.Message);
+            return 0;
+        }
+
+        if (images.Count <= s.MaxLibraryImages) return 0;
+
+        // 保护当前壁纸（刚启动时 CurrentWallpaperText 为空，用最近使用的第一张）
+        var current = CurrentWallpaperText.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(current) || !File.Exists(current))
+            current = s.RecentImages.FirstOrDefault(File.Exists);
+
+        string? protect = null;
+        if (current is not null && IsUnderFolder(folder, current))
+        {
+            try { protect = Path.GetFullPath(current); } catch { /* 忽略 */ }
+        }
+
+        // 最新优先；时间相同时按文件名排序，保证每次结果一致
+        var ordered = images
+            .Select(path => (Path: path, Time: SafeWriteTime(path)))
+            .OrderByDescending(x => x.Time)
+            .ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.Path)
+            .ToList();
+
+        var keep = new HashSet<string>(ordered.Take(s.MaxLibraryImages), StringComparer.OrdinalIgnoreCase);
+        if (protect is not null && !keep.Contains(protect))
+        {
+            // 当前壁纸比保留区旧：替换保留区里最旧的一张，总数仍等于上限
+            var oldestKept = ordered.Take(s.MaxLibraryImages).LastOrDefault();
+            if (oldestKept is not null) keep.Remove(oldestKept);
+            keep.Add(protect);
+        }
+
+        var moved = 0;
+        foreach (var file in ordered.Where(f => !keep.Contains(f)))
+        {
+            if (RecycleBin.Delete(file)) moved++;
+        }
+
+        if (moved == 0)
+        {
+            if (showStatus)
+                SetStatus($"图片库 {images.Count} 张，超过上限 {s.MaxLibraryImages} 张，但最旧的图片没能移入回收站（可能被占用）。");
+            return 0;
+        }
+
+        s.RecentImages.RemoveAll(p => !File.Exists(p));
+        SettingsService.Save(s);
+        RefreshThumbnails();
+        RefreshHistory();
+
+        if (showStatus)
+            SetStatus($"图片库 {images.Count} 张，超过上限 {s.MaxLibraryImages} 张：已把最旧的 {moved} 张移到回收站（可恢复）。");
+        return moved;
+    }
+
+    private static bool IsImageFile(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png";
+
+    private static DateTime SafeWriteTime(string path)
+    {
+        try { return File.GetLastWriteTime(path); } catch { return DateTime.MinValue; }
+    }
+
+    private static bool IsUnderFolder(string folder, string path)
+    {
+        try
+        {
+            var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar)
+                       + Path.DirectorySeparatorChar;
+            return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private void RefreshThumbnails()
     {
@@ -1069,6 +1183,7 @@ public sealed partial class MainWindow : Window
                 SetPreviewThumb(NextThumb, NextThumbIcon, null);
                 NextTitle.Text = "未启用 Reddit 来源";
                 UpdateDiscardButton(DiscardNextBtn, null);
+                PreviewCache.ClearAll();
                 return;
             }
 
@@ -1102,6 +1217,7 @@ public sealed partial class MainWindow : Window
                 SetPreviewThumb(NextThumb, NextThumbIcon, null);
                 NextTitle.Text = "没有新的候选（都已下载过或已舍弃）";
                 UpdateDiscardButton(DiscardNextBtn, null);
+                PreviewCache.ClearAll();
                 return;
             }
 
@@ -1110,7 +1226,8 @@ public sealed partial class MainWindow : Window
             NextTitle.Text = _nextName;
             UpdateDiscardButton(DiscardNextBtn, _nextName);
 
-            PreviewCache.Cleanup(TimeSpan.FromDays(3));
+            PreviewCache.Cleanup(TimeSpan.FromHours(6));
+            PreviewCache.CleanupExcept(_nextName);
             var cached = PreviewCache.Find(_nextName);
             if (cached is null)
             {
@@ -1249,6 +1366,9 @@ public sealed partial class MainWindow : Window
     private void ExitApp()
     {
         _exiting = true;
+        NextThumb.Source = null;
+        PrevThumb.Source = null;
+        PreviewCache.ClearAll();
         _tray?.Dispose();
         Application.Current.Exit();
     }
@@ -1424,12 +1544,17 @@ public sealed partial class MainWindow : Window
                     RefreshHistory();
                     RefreshThumbnails();
                 }
+                CurrentWallpaperText.Text = result;
+
+                // 图片库总张数上限：当前壁纸已记录，清理时不会把它删掉
+                var pruned = ok ? EnforceLibraryLimit(s, showStatus: false) : 0;
+
                 SetStatus((ok
                     ? $"壁纸已更换：{Path.GetFileName(result)}（来源：{CurrentSourceName(usedSource)}）"
                     : $"设置壁纸失败：{result}") +
                     (note is null ? "" : "；" + note) +
-                    (oauthIncomplete ? "；注意：OAuth 缺少 Client ID，本次未使用账号密码" : ""));
-                CurrentWallpaperText.Text = result;
+                    (oauthIncomplete ? "；注意：OAuth 缺少 Client ID，本次未使用账号密码" : "") +
+                    (pruned > 0 ? $"；图片库超过上限 {s.MaxLibraryImages} 张，已清理最旧的 {pruned} 张（回收站可恢复）" : ""));
 
                 // 队列前进一格，重新预取「下一张」
                 _ = RefreshPreviewAsync();

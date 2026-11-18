@@ -103,4 +103,32 @@ public static class PreviewCache
             // 缓存目录不可用不影响主流程
         }
     }
+
+    /// <summary>只保留「下一张」对应的缓存，其余预取文件立即删掉（自动清理，避免缓存越积越多）。</summary>
+    public static void CleanupExcept(string? keepFileName)
+    {
+        try
+        {
+            if (!Directory.Exists(CacheDir)) return;
+            var keepStem = string.IsNullOrWhiteSpace(keepFileName)
+                ? null
+                : Path.GetFileNameWithoutExtension(keepFileName);
+
+            foreach (var file in Directory.EnumerateFiles(CacheDir))
+            {
+                if (keepStem is not null &&
+                    string.Equals(Path.GetFileNameWithoutExtension(file), keepStem, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try { File.Delete(file); } catch { /* 缩略图还占着句柄，下次再清 */ }
+            }
+        }
+        catch
+        {
+            // 忽略
+        }
+    }
+
+    /// <summary>清空整个预取缓存（程序退出时调用）。</summary>
+    public static void ClearAll() => CleanupExcept(null);
 }
