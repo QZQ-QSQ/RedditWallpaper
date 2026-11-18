@@ -152,7 +152,7 @@
                             <Border Grid.Column="0" Style="{StaticResource PreviewCard}">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="上一张" Style="{StaticResource Hint}" />
-                                    <Border Height="92" CornerRadius="4"
+                                    <Border x:Name="PrevThumbFrame" Height="92" CornerRadius="4"
                                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
                                         <Grid>
                                             <Image x:Name="PrevThumb" Stretch="UniformToFill" />

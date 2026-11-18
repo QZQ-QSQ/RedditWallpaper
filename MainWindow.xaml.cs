@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using RedditWallpaper.Models;
 using RedditWallpaper.Services;
@@ -49,6 +50,16 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref NativePoint pt);
+
     private const int SW_HIDE = 0;
     private const int SW_SHOW = 5;
 
@@ -58,11 +69,43 @@ public sealed partial class MainWindow : Window
 
         _hwnd = WindowNative.GetWindowHandle(this);
         _settings = SettingsService.Load();
+
+        // 原生菜单/窗口主题跟随系统深色
+        if (Content is FrameworkElement themeRoot)
+        {
+            void ApplyTheme()
+            {
+                var dark = themeRoot.ActualTheme == ElementTheme.Dark;
+                DarkMode.ApplyWindowTheme(_hwnd, dark);
+                DarkMode.RefreshMenuThemes();
+            }
+
+            ApplyTheme();
+            themeRoot.Loaded += (_, _) => ApplyTheme();
+            themeRoot.ActualThemeChanged += (_, _) => ApplyTheme();
+        }
+
         LoadSettingsToUi();
         RefreshHistory();
         RefreshDeletedHint();
         _uiReady = true;
         _ = RefreshPreviewAsync();
+
+        // 「上一张」是图片库里的真实文件：右键也给 Windows 原生菜单
+        PrevThumbFrame.ContextRequested += (_, e) =>
+        {
+            if (string.IsNullOrWhiteSpace(_prevPreviewPath) || !File.Exists(_prevPreviewPath)) return;
+            e.Handled = true;
+            e.TryGetPosition(PrevThumbFrame, out var pos);
+            ShowImageShellMenu(_prevPreviewPath, PrevThumbFrame, pos);
+        };
+        AutomationProperties.SetHelpText(PrevThumbFrame, "右键打开 Windows 菜单");
+
+        // 图片库缩略图：右键或键盘 Shift+F10 都走同一个 Windows 菜单
+        // handledEventsToo: GridView 可能先处理右键，这里仍要收到
+        ThumbGrid.AddHandler(UIElement.ContextRequestedEvent,
+            new Windows.Foundation.TypedEventHandler<UIElement, ContextRequestedEventArgs>(ThumbGrid_ContextRequested),
+            true);
 
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _tickTimer.Tick += (_, _) => OnTick();
@@ -661,6 +704,10 @@ public sealed partial class MainWindow : Window
             var captured = path;
             bool pendingDelete = false;
 
+            // 供右键/键盘菜单定位到具体文件
+            panel.Tag = captured;
+            AutomationProperties.SetHelpText(panel, "右键或 Shift+F10 打开 Windows 菜单");
+
             var setBtn = new Button
             {
                 Content = "设为壁纸",
@@ -719,6 +766,109 @@ public sealed partial class MainWindow : Window
 
         // 布局完成后按实际宽度铺满
         DispatcherQueue.TryEnqueue(ApplyThumbLayout);
+    }
+
+    /// <summary>从被右键的缩略图元素向上找到 panel.Tag（文件路径）。键盘 Shift+F10 时源是 GridViewItem。</summary>
+    private void ThumbGrid_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        if (args.OriginalSource is not DependencyObject src) return;
+
+        string? path = null;
+        FrameworkElement? anchor = null;
+        for (var d = src; d is not null && !ReferenceEquals(d, ThumbGrid); d = VisualTreeHelper.GetParent(d))
+        {
+            if (d is FrameworkElement { Tag: string tagged } fe && File.Exists(tagged))
+            {
+                path = tagged;
+                anchor = fe;
+                break;
+            }
+
+            // 键盘触发时 OriginalSource 是容器，文件路径在容器内容的 Tag 上
+            if (d is GridViewItem { Content: FrameworkElement { Tag: string contentTag } } item && File.Exists(contentTag))
+            {
+                path = contentTag;
+                anchor = item;
+                break;
+            }
+        }
+
+        if (path is null || anchor is null) return;
+        args.Handled = true;
+
+        var position = new Windows.Foundation.Point(anchor.ActualWidth / 2, anchor.ActualHeight / 2);
+        if (args.TryGetPosition(anchor, out var pointer) && (pointer.X != 0 || pointer.Y != 0))
+            position = pointer;
+        ShowImageShellMenu(path, anchor, position);
+    }
+
+    /// <summary>在缩略图的实际位置弹出系统菜单（支持鼠标右键与键盘 Shift+F10）。</summary>
+    private void ShowImageShellMenu(string path, UIElement anchor, Windows.Foundation.Point position)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            SetStatus("文件已不存在：" + (string.IsNullOrWhiteSpace(path) ? "（未知）" : Path.GetFileName(path)));
+            RefreshThumbnails();
+            return;
+        }
+
+        try
+        {
+            var root = (UIElement)Content;
+            var point = anchor.TransformToVisual(root).TransformPoint(position);
+            var scale = GetDpiForWindow(_hwnd) / 96.0;
+            var origin = new NativePoint();
+            ClientToScreen(_hwnd, ref origin);
+            var x = origin.X + (int)Math.Round(point.X * scale);
+            var y = origin.Y + (int)Math.Round(point.Y * scale);
+
+            // 不要在 XAML 事件分发过程中直接开原生模态菜单（会重入消息循环），
+            // 等这次事件返回后再弹，避免极少数情况下 XAML 内部状态被破坏。
+            if (!DispatcherQueue.TryEnqueue(() =>
+                {
+                    ShellContextMenu.Show(_hwnd, path, x, y);
+                    _ = WatchShellMenuResultAsync(path);
+                }))
+            {
+                ShellContextMenu.Show(_hwnd, path, x, y);
+                _ = WatchShellMenuResultAsync(path);
+            }
+            return;
+        }
+        catch
+        {
+            // 坐标换算失败就退回鼠标位置
+        }
+
+        if (!DispatcherQueue.TryEnqueue(() =>
+            {
+                ShellContextMenu.Show(_hwnd, path);
+                _ = WatchShellMenuResultAsync(path);
+            }))
+        {
+            ShellContextMenu.Show(_hwnd, path);
+            _ = WatchShellMenuResultAsync(path);
+        }
+    }
+
+    /// <summary>
+    /// 菜单关闭后检查文件是否被 shell 删除（可能先弹确认框，因此轮询几秒）。
+    /// 删除同样写入「不再下载」，保证从 Windows 菜单删掉的图不会自动回来。
+    /// </summary>
+    private async Task WatchShellMenuResultAsync(string path)
+    {
+        for (var i = 0; i < 12 && File.Exists(path); i++)
+            await Task.Delay(250);
+
+        if (File.Exists(path)) return;
+
+        var name = Path.GetFileName(path);
+        _settings.RememberDeletedImage(name);
+        SettingsService.Save(_settings);
+        RefreshThumbnails();
+        RefreshDeletedHint();
+        SetStatus($"已删除「{name}」（回收站），以后不会再自动下载。");
+        _ = RefreshPreviewAsync();
     }
 
     /// <summary>把图片库里的某张图设为当前壁纸（并记入最近使用）。</summary>
