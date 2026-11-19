@@ -1194,6 +1194,7 @@ public sealed partial class MainWindow : Window
                 _queue.Clear();
             }
 
+            var skippedByFilter = 0;
             if (_queue.Count == 0)
             {
                 NextTitle.Text = "正在获取候选…";
@@ -1201,11 +1202,12 @@ public sealed partial class MainWindow : Window
             NextThumbIcon.Visibility = Visibility.Collapsed;
                 var batch = await _reddit.BuildCandidatesAsync(s);
                 var redditFolder = string.IsNullOrWhiteSpace(s.SaveFolder) ? "" : SourceFolder(s.SaveFolder, "reddit");
+                skippedByFilter = 0;
                 foreach (var c in batch.Candidates ?? new List<RedditService.RedditImage>())
                 {
                     // 删除过 / 舍弃过 / 图片库里已有同名文件 → 不进队列
                     var name = RedditService.FileNameFor(c);
-                    if (s.ShouldSkipDownload(name)) continue;
+                    if (s.ShouldSkipDownload(name)) { skippedByFilter++; continue; }
                     if (redditFolder.Length > 0 && File.Exists(Path.Combine(redditFolder, name))) continue;
                     _queue.Add(c);
                 }
@@ -1215,7 +1217,9 @@ public sealed partial class MainWindow : Window
             {
                 _nextName = null;
                 SetPreviewThumb(NextThumb, NextThumbIcon, null);
-                NextTitle.Text = "没有新的候选（都已下载过或已舍弃）";
+                NextTitle.Text = skippedByFilter > 0
+                    ? "候选都在「不再下载/已舍弃」名单里"
+                    : "没有新的候选（都已下载过或已舍弃）";
                 UpdateDiscardButton(DiscardNextBtn, null);
                 PreviewCache.ClearAll();
                 return;

@@ -232,6 +232,11 @@ public sealed class RedditService
 
         if (mismatch > 0)
             return DownloadResult.Fail($"有 {mismatch} 张图片不符合最低分辨率 {s.WallpaperResolution}，已删除未保存（可调低「最低分辨率」）");
+
+        // 所有候选都被「不再下载/已舍弃」名单拦截时，不能再报成网络/存储错误
+        if (candidates.Count > 0 && candidates.All(c => s.ShouldSkipDownload(FileNameFor(c))))
+            return DownloadResult.Fail($"解析到 {candidates.Count} 个候选，但都在「不再下载/已舍弃」名单里（可在高级设置清除记录）");
+
         return DownloadResult.Fail($"解析到 {candidates.Count} 个候选但下载全部失败（网络、图片域名被墙或存储权限）");
     }
 
@@ -671,10 +676,13 @@ public sealed class RedditService
         return list;
     }
 
-    private static bool IsStaticImageUrl(string url) =>
-        url.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-        url.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
-        url.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+    private static bool IsStaticImageUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+        var ext = Path.GetExtension(uri.AbsolutePath).ToLowerInvariant();
+        return ext is ".jpg" or ".jpeg" or ".png";
+    }
 
     private static async Task<string?> DownloadImageAsync(HttpClient http, string url, string folder,
         string id, string slug, string? baseUrl = null, AppSettings? settings = null)
